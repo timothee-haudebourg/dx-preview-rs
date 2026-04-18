@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use wasm_bindgen::{JsCast, JsValue, closure::Closure};
 use web_sys::{HtmlIFrameElement, MessageEvent};
 
-use crate::book::Value;
+use crate::model::Value;
 
 // ── Protocol ──────────────────────────────────────────────────────────────────
 

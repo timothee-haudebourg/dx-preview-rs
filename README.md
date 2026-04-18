@@ -58,12 +58,12 @@ pub fn PrimaryButton(
 
 | Attribute | Effect |
 |---|---|
-| *(none)* | Visible; type must implement [`book::ShowcaseType`]; default via `Default::default()` |
+| *(none)* | Visible; type must implement [`model::ShowcaseType`]; default via `Default::default()` |
 | `#[preview(default = expr)]` | Visible; use `expr` as the initial value |
 | `#[preview(hide)]` | Hidden; `Default::default()` is used in the preview |
 | `#[preview(hide, default = expr)]` | Hidden; `expr` is used in the preview |
 
-If a type does not implement [`book::ShowcaseType`] and is not marked
+If a type does not implement [`model::ShowcaseType`] and is not marked
 `#[preview(hide)]`, you will get a compile-time error on the offending parameter.
 
 #### 3. Implement `ShowcaseType` for custom types (optional)
@@ -72,7 +72,7 @@ If a type does not implement [`book::ShowcaseType`] and is not marked
 For your own types, implement the trait:
 
 ```rust
-use dx_preview::book::{ShowcaseType, IntType, Type, Value, TypeError};
+use dx_preview::model::{ShowcaseType, IntType, Type, Value, TypeError};
 
 struct Radius(u32);
 
@@ -80,12 +80,12 @@ impl ShowcaseType for Radius {
     const TYPE: Type = Type::Int(IntType::U32);
 
     fn to_value(&self) -> Value {
-        Value::Int(dx_preview::book::IntValue::U32(self.0))
+        Value::Int(dx_preview::model::IntValue::U32(self.0))
     }
 
     fn try_from_value(v: Value) -> Result<Self, TypeError> {
         match v {
-            Value::Int(dx_preview::book::IntValue::U32(n)) => Ok(Radius(n)),
+            Value::Int(dx_preview::model::IntValue::U32(n)) => Ok(Radius(n)),
             _ => Err(TypeError),
         }
     }

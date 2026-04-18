@@ -10,9 +10,9 @@
 //! original function (all gated on `#[cfg(feature = "storybook")]`):
 //!
 //! 1. A `static [Property; N]` array — one entry per *visible* parameter,
-//!    describing its name and reflected [`Type`](dx_preview::book::Type).
+//!    describing its name and reflected [`Type`](dx_preview::model::Type).
 //! 2. A `fn() -> Vec<Value>` — returns the default
-//!    [`Value`](dx_preview::book::Value) for each visible parameter.
+//!    [`Value`](dx_preview::model::Value) for each visible parameter.
 //! 3. A `fn(Vec<Value>) -> Element` — reconstructs the component props from the
 //!    supplied values and calls the component.
 //!
@@ -185,9 +185,9 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 			let name_str = p.name.to_string();
 			let ty = &p.ty;
 			quote! {
-				::dx_preview::book::Property {
+				::dx_preview::model::Property {
 					name: #name_str,
-					r#type: <#ty as ::dx_preview::book::ShowcaseType>::TYPE,
+					r#type: <#ty as ::dx_preview::model::ShowcaseType>::TYPE,
 					required: false,
 				}
 			}
@@ -201,7 +201,7 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 			let ty = &p.ty;
 			let default = p.default_tokens();
 			quote! {
-				<#ty as ::dx_preview::book::ShowcaseType>::to_value(&#default)
+				<#ty as ::dx_preview::model::ShowcaseType>::to_value(&#default)
 			}
 		})
 		.collect();
@@ -223,7 +223,7 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 					let #name: #ty = __values
 						.next()
 						.and_then(|v| {
-							<#ty as ::dx_preview::book::ShowcaseType>::try_from_value(v).ok()
+							<#ty as ::dx_preview::model::ShowcaseType>::try_from_value(v).ok()
 						})
 						.unwrap_or_else(|| #fallback);
 				}
@@ -252,14 +252,14 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 		#[cfg(feature = "storybook")]
 		#[doc(hidden)]
 		#[allow(non_upper_case_globals)]
-		static #props_static: [::dx_preview::book::Property; #visible_count] = [
+		static #props_static: [::dx_preview::model::Property; #visible_count] = [
 			#(#prop_entries),*
 		];
 
 		#[cfg(feature = "storybook")]
 		#[doc(hidden)]
 		#[allow(non_snake_case)]
-		fn #defaults_fn() -> ::std::vec::Vec<::dx_preview::book::Value> {
+		fn #defaults_fn() -> ::std::vec::Vec<::dx_preview::model::Value> {
 			vec![#(#default_value_entries),*]
 		}
 
@@ -267,7 +267,7 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 		#[doc(hidden)]
 		#[allow(non_snake_case)]
 		fn #render_fn(
-			values: ::std::vec::Vec<::dx_preview::book::Value>,
+			values: ::std::vec::Vec<::dx_preview::model::Value>,
 		) -> ::dioxus::prelude::Element {
 			use ::dioxus::prelude::*;
 			let mut __values = values.into_iter();
@@ -280,8 +280,8 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 		}
 
 		#[cfg(feature = "storybook")]
-		::dx_preview::book::inventory::submit! {
-			::dx_preview::book::ComponentEntry {
+		::dx_preview::model::inventory::submit! {
+			::dx_preview::model::ComponentEntry {
 				name: #fn_name_str,
 				properties: &#props_static,
 				default_values: #defaults_fn,

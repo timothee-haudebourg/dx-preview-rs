@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
-use crate::book::{ComponentEntry, IntType, IntValue, Property, Type, Value};
+use crate::model::{ComponentEntry, IntType, IntValue, Property, Type, Value};
 
 use super::{IFRAME_ID, IframeSender, Route, use_iframe_ready};
 

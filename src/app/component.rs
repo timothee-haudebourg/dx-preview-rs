@@ -1,6 +1,6 @@
 use dioxus::prelude::*;
 
-use crate::book::ComponentEntry;
+use crate::model::ComponentEntry;
 
 use super::{config, notify_parent_ready, use_incoming_values};
 
