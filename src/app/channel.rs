@@ -20,6 +20,8 @@ use web_sys::{HtmlIFrameElement, MessageEvent};
 
 use crate::model::Value;
 
+type Values = Vec<Option<Value>>;
+
 // ── Protocol ──────────────────────────────────────────────────────────────────
 
 /// Messages exchanged between the shell and the preview iframe.
@@ -27,7 +29,7 @@ use crate::model::Value;
 #[serde(tag = "type", content = "data")]
 enum Message {
 	/// Parent → iframe: set the component's property values.
-	Values(Vec<Value>),
+	Values(Values),
 	/// Iframe → parent: WASM has rendered and CSS has been applied.
 	Ready,
 }
@@ -73,7 +75,7 @@ pub struct IframeSender;
 
 impl IframeSender {
 	/// Send the current property values to the iframe.
-	pub fn send_values(self, values: &[Value]) {
+	pub fn send_values(self, values: &[Option<Value>]) {
 		self.post(Message::Values(values.to_vec()));
 	}
 
@@ -134,11 +136,11 @@ pub fn notify_parent_ready() {
 }
 
 /// Hook: listens for [`Message::Values`] sent by the parent frame and exposes
-/// them as a reactive `Signal<Vec<Value>>`.
+/// them as a reactive `Signal<Values>`.
 ///
 /// `defaults` is used as the initial value until the parent sends the first
 /// update. The listener is removed automatically on unmount.
-pub fn use_incoming_values(defaults: impl FnOnce() -> Vec<Value>) -> Signal<Vec<Value>> {
+pub fn use_incoming_values(defaults: impl FnOnce() -> Values) -> Signal<Values> {
 	let mut values = use_signal(defaults);
 
 	let _listener = use_hook(|| {

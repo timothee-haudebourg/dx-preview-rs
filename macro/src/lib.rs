@@ -10,11 +10,12 @@
 //! original function (all gated on `#[cfg(feature = "storybook")]`):
 //!
 //! 1. A `static [Property; N]` array — one entry per *visible* parameter,
-//!    describing its name and reflected [`Type`](dx_preview::model::Type).
-//! 2. A `fn() -> Vec<Value>` — returns the default
-//!    [`Value`](dx_preview::model::Value) for each visible parameter.
-//! 3. A `fn(Vec<Value>) -> Element` — reconstructs the component props from the
-//!    supplied values and calls the component.
+//!    describing its name, reflected [`Type`](dx_preview::model::Type), and
+//!    whether it is required.
+//! 2. A `fn() -> Vec<Option<Value>>` — returns the default value (or `None` for
+//!    optional properties that default to absent) for each visible parameter.
+//! 3. A `fn(Vec<Option<Value>>) -> Element` — reconstructs the component props
+//!    from the supplied values and calls the component.
 //!
 //! These are registered via `inventory::submit!` so that the shell can discover
 //! every annotated component without a central list.
@@ -187,8 +188,9 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 			quote! {
 				::dx_preview::model::Property {
 					name: #name_str,
-					r#type: <#ty as ::dx_preview::model::ShowcaseType>::TYPE,
-					required: false,
+					r#type: <<#ty as ::dx_preview::model::PropertyType>::Type
+						as ::dx_preview::model::Reflect>::TYPE,
+					required: <#ty as ::dx_preview::model::PropertyType>::REQUIRED,
 				}
 			}
 		})
@@ -201,7 +203,7 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 			let ty = &p.ty;
 			let default = p.default_tokens();
 			quote! {
-				<#ty as ::dx_preview::model::ShowcaseType>::to_value(&#default)
+				<#ty as ::dx_preview::model::PropertyType>::to_opt_value(&#default)
 			}
 		})
 		.collect();
@@ -220,12 +222,11 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 				quote! { let #name: #ty = #fallback; }
 			} else {
 				quote! {
-					let #name: #ty = __values
-						.next()
-						.and_then(|v| {
-							<#ty as ::dx_preview::model::ShowcaseType>::try_from_value(v).ok()
-						})
-						.unwrap_or_else(|| #fallback);
+					let #name: #ty =
+						<#ty as ::dx_preview::model::PropertyType>::try_from_opt_value(
+							__values.next().flatten(),
+						)
+						.unwrap_or_else(|_| #fallback);
 				}
 			}
 		})
@@ -259,7 +260,7 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 		#[cfg(feature = "storybook")]
 		#[doc(hidden)]
 		#[allow(non_snake_case)]
-		fn #defaults_fn() -> ::std::vec::Vec<::dx_preview::model::Value> {
+		fn #defaults_fn() -> ::std::vec::Vec<::std::option::Option<::dx_preview::model::Value>> {
 			vec![#(#default_value_entries),*]
 		}
 
@@ -267,7 +268,7 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 		#[doc(hidden)]
 		#[allow(non_snake_case)]
 		fn #render_fn(
-			values: ::std::vec::Vec<::dx_preview::model::Value>,
+			values: ::std::vec::Vec<::std::option::Option<::dx_preview::model::Value>>,
 		) -> ::dioxus::prelude::Element {
 			use ::dioxus::prelude::*;
 			let mut __values = values.into_iter();

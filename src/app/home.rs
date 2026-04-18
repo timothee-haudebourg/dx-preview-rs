@@ -4,6 +4,14 @@ use dioxus::prelude::*;
 
 use crate::model::{ComponentEntry, IntType, IntValue, Property, Type, Value};
 
+fn default_value(t: Type) -> Value {
+	match t {
+		Type::Bool => Value::Bool(false),
+		Type::String => Value::String(String::new()),
+		Type::Int(int_type) => Value::Int(IntValue::from_i128(0, int_type)),
+	}
+}
+
 use super::{IFRAME_ID, IframeSender, Route, use_iframe_ready};
 
 // ── Context ───────────────────────────────────────────────────────────────────
@@ -108,7 +116,7 @@ fn MenuItem(index: usize, entry: &'static ComponentEntry) -> Element {
 #[component]
 fn ComponentView(entry: &'static ComponentEntry) -> Element {
 	// Initialise values from the component's own defaults.
-	let values: Signal<Vec<Value>> = use_signal(entry.default_values);
+	let values: Signal<Vec<Option<Value>>> = use_signal(entry.default_values);
 
 	// src is fixed for the lifetime of this ComponentView instance (the `key`
 	// on the call site ensures a fresh mount whenever `entry` changes).
@@ -161,7 +169,10 @@ fn ComponentView(entry: &'static ComponentEntry) -> Element {
 // ── ComponentProperties ───────────────────────────────────────────────────────
 
 #[component]
-fn ComponentProperties(entry: &'static ComponentEntry, values: Signal<Vec<Value>>) -> Element {
+fn ComponentProperties(
+	entry: &'static ComponentEntry,
+	values: Signal<Vec<Option<Value>>>,
+) -> Element {
 	if entry.properties.is_empty() {
 		return rsx! {
 			div {
@@ -193,26 +204,57 @@ fn ComponentProperties(entry: &'static ComponentEntry, values: Signal<Vec<Value>
 // ── PropertyEditor ────────────────────────────────────────────────────────────
 
 #[component]
-fn PropertyEditor(prop: &'static Property, index: usize, values: Signal<Vec<Value>>) -> Element {
+fn PropertyEditor(
+	prop: &'static Property,
+	index: usize,
+	mut values: Signal<Vec<Option<Value>>>,
+) -> Element {
+	let enabled = use_memo(move || values.read().get(index).is_some_and(|v| v.is_some()));
+
 	rsx! {
 		div {
 			style: "padding:8px 16px;",
 
-			label {
-				style: "display:block;font-size:12px;font-weight:500;color:#6b7280;margin-bottom:4px;",
-				"{prop.name}"
+			div {
+				style: "display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;",
+				label {
+					style: if enabled() {
+						"font-size:12px;font-weight:500;color:#6b7280;"
+					} else {
+						"font-size:12px;font-weight:500;color:#d1d5db;"
+					},
+					"{prop.name}"
+				}
+				if !prop.required {
+					input {
+						r#type: "checkbox",
+						checked: enabled(),
+						style: "width:14px;height:14px;cursor:pointer;accent-color:#2563eb;",
+						onchange: move |e| {
+							if let Some(slot) = values.write().get_mut(index) {
+								*slot = if e.checked() {
+									Some(default_value(prop.r#type))
+								} else {
+									None
+								};
+							}
+						},
+					}
+				}
 			}
 
-			match prop.r#type {
-				Type::Bool => rsx! {
-					BoolEditor { index, values }
-				},
-				Type::String => rsx! {
-					StringEditor { index, values }
-				},
-				Type::Int(int_type) => rsx! {
-					IntEditor { index, int_type, values }
-				},
+			if enabled() {
+				match prop.r#type {
+					Type::Bool => rsx! {
+						BoolEditor { index, values }
+					},
+					Type::String => rsx! {
+						StringEditor { index, values }
+					},
+					Type::Int(int_type) => rsx! {
+						IntEditor { index, int_type, values }
+					},
+				}
 			}
 		}
 	}
@@ -221,8 +263,9 @@ fn PropertyEditor(prop: &'static Property, index: usize, values: Signal<Vec<Valu
 // ── Field editors ─────────────────────────────────────────────────────────────
 
 #[component]
-fn BoolEditor(index: usize, mut values: Signal<Vec<Value>>) -> Element {
-	let checked = use_memo(move || matches!(values.read().get(index), Some(Value::Bool(true))));
+fn BoolEditor(index: usize, mut values: Signal<Vec<Option<Value>>>) -> Element {
+	let checked =
+		use_memo(move || matches!(values.read().get(index), Some(Some(Value::Bool(true)))));
 
 	rsx! {
 		label {
@@ -233,8 +276,8 @@ fn BoolEditor(index: usize, mut values: Signal<Vec<Value>>) -> Element {
 				style: "width:16px;height:16px;cursor:pointer;accent-color:#2563eb;",
 				onchange: move |e| {
 					if let Some(slot) = values.write().get_mut(index) {
-						*slot = Value::Bool(e.checked());
-					}
+							*slot = Some(Value::Bool(e.checked()));
+						}
 				},
 			}
 			span {
@@ -246,9 +289,9 @@ fn BoolEditor(index: usize, mut values: Signal<Vec<Value>>) -> Element {
 }
 
 #[component]
-fn StringEditor(index: usize, mut values: Signal<Vec<Value>>) -> Element {
+fn StringEditor(index: usize, mut values: Signal<Vec<Option<Value>>>) -> Element {
 	let current = use_memo(move || match values.read().get(index) {
-		Some(Value::String(s)) => s.clone(),
+		Some(Some(Value::String(s))) => s.clone(),
 		_ => String::new(),
 	});
 
@@ -259,17 +302,17 @@ fn StringEditor(index: usize, mut values: Signal<Vec<Value>>) -> Element {
 			style: "width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;font-size:13px;outline:none;background:#fff;",
 			oninput: move |e| {
 				if let Some(slot) = values.write().get_mut(index) {
-					*slot = Value::String(e.value());
-				}
+						*slot = Some(Value::String(e.value()));
+					}
 			},
 		}
 	}
 }
 
 #[component]
-fn IntEditor(index: usize, int_type: IntType, mut values: Signal<Vec<Value>>) -> Element {
+fn IntEditor(index: usize, int_type: IntType, mut values: Signal<Vec<Option<Value>>>) -> Element {
 	let current = use_memo(move || match values.read().get(index) {
-		Some(Value::Int(iv)) => iv.as_i128().to_string(),
+		Some(Some(Value::Int(iv))) => iv.as_i128().to_string(),
 		_ => "0".to_string(),
 	});
 
@@ -281,7 +324,7 @@ fn IntEditor(index: usize, int_type: IntType, mut values: Signal<Vec<Value>>) ->
 			oninput: move |e| {
 				if let Ok(n) = e.value().parse::<i128>()
 					&& let Some(slot) = values.write().get_mut(index) {
-						*slot = Value::Int(IntValue::from_i128(n, int_type));
+						*slot = Some(Value::Int(IntValue::from_i128(n, int_type)));
 					}
 			},
 		}
