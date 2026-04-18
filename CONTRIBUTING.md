@@ -1,0 +1,29 @@
+# How to Contribute
+
+Contributions are welcome! Here is how to contribute.
+
+## Contribution Guidelines
+
+Please read the [contribution guidelines](https://github.com/timothee-haudebourg/admin/blob/main/files/CONTRIBUTING.md) before submitting your changes. Contributions that do not adhere to these guidelines may be rejected without further explanation.
+
+## Architecture
+
+The project is split into two crates:
+
+- **`dx-preview-macro`** — a proc-macro crate providing the `#[preview]` attribute.
+- **`dx-preview`** — the runtime library, with an optional `app` feature that enables the
+  interactive browser UI.
+
+Refer to the crate and module documentation for implementation details.
+
+## README.md
+
+The `README.md` is generated from the crate-level doc comment in `src/lib.rs` using
+[`cargo rdme`](https://github.com/orium/cargo-rdme). After editing `src/lib.rs`, run:
+
+```sh
+cargo rdme
+```
+
+Do not edit `README.md` directly between the `<!-- cargo-rdme start -->` and
+`<!-- cargo-rdme end -->` markers — those changes will be overwritten.

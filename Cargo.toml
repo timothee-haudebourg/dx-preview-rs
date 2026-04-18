@@ -1,0 +1,17 @@
+[package]
+name = "dx-preview"
+version = "0.1.0"
+edition = "2024"
+
+[features]
+default = []
+app = ["dioxus/web", "dioxus/router", "dep:serde", "dep:serde_json", "dep:wasm-bindgen", "dep:web-sys"]
+
+[dependencies]
+dx-preview-macro = { path = "macro" }
+dioxus = { version = "0.7.5", features = ["router"] }
+inventory = "0.3"
+serde = { version = "1", features = ["derive"], optional = true }
+serde_json = { version = "1", optional = true }
+wasm-bindgen = { version = "0.2", optional = true }
+web-sys = { version = "0.3", features = ["Window", "HtmlIFrameElement", "MessageEvent", "EventTarget"], optional = true }
