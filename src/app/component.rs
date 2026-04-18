@@ -28,7 +28,7 @@ fn ComponentBody(name: String, props: String) -> Element {
 			inventory::iter::<ComponentEntry>
 				.into_iter()
 				.find(|e| e.name == name.as_str())
-				.map(|e| (e.default_values)())
+				.map(|e| e.properties.iter().map(|p| (p.default_value)()).collect())
 				.unwrap_or_default()
 		})
 	});

@@ -27,9 +27,6 @@ pub struct ComponentEntry {
 	/// Component properties.
 	pub properties: &'static [Property],
 
-	/// Default value for each property.
-	pub default_values: fn() -> Vec<Option<Value>>,
-
 	/// Render the component with the given properties.
 	pub render: fn(Vec<Option<Value>>) -> dioxus::prelude::Element,
 }

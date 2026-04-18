@@ -8,6 +8,17 @@ pub enum Type {
 	Enum(EnumType),
 }
 
+impl Type {
+	pub fn default_value(&self) -> Value {
+		match self {
+			Self::Bool => Value::Bool(false),
+			Self::Int(t) => Value::Int(t.default_value()),
+			Self::String => Value::String(String::new()),
+			Self::Enum(t) => Value::Enum(t.default_value()),
+		}
+	}
+}
+
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IntType {
 	U8,
@@ -20,10 +31,31 @@ pub enum IntType {
 	I64,
 }
 
+impl IntType {
+	pub fn default_value(&self) -> IntValue {
+		match self {
+			Self::U8 => IntValue::U8(0),
+			Self::U16 => IntValue::U16(0),
+			Self::U32 => IntValue::U32(0),
+			Self::U64 => IntValue::U64(0),
+			Self::I8 => IntValue::I8(0),
+			Self::I16 => IntValue::I16(0),
+			Self::I32 => IntValue::I32(0),
+			Self::I64 => IntValue::I64(0),
+		}
+	}
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct EnumType {
 	pub name: &'static str,
 	pub variants: &'static [EnumVariant],
+}
+
+impl EnumType {
+	pub fn default_value(&self) -> u8 {
+		0
+	}
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

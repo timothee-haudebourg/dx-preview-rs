@@ -7,6 +7,12 @@ edition = "2024"
 default = []
 model = []
 app = ["model", "dioxus/web", "dioxus/router", "dep:serde", "dep:serde_json", "dep:wasm-bindgen", "dep:web-sys"]
+preview = ["app"]
+
+[[bin]]
+name = "preview"
+path = "src/bin/preview.rs"
+required-features = ["preview"]
 
 [dependencies]
 dx-preview-macro = { path = "macro" }

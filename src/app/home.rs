@@ -2,16 +2,11 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
-use crate::model::{ComponentEntry, EnumType, IntType, IntValue, Property, Type, Value};
-
-fn default_value(t: Type) -> Value {
-	match t {
-		Type::Bool => Value::Bool(false),
-		Type::String => Value::String(String::new()),
-		Type::Int(int_type) => Value::Int(IntValue::from_i128(0, int_type)),
-		Type::Enum(_) => Value::Enum(0),
-	}
-}
+use super::ui::input::{
+	BoolInput, EnumInput, IntInput, StringInput,
+	adapter::{use_bool_signal, use_enum_signal, use_int_signal, use_string_signal},
+};
+use crate::model::{ComponentEntry, EnumType, IntType, Property, Type, Value};
 
 use super::{IFRAME_ID, IframeSender, Route, use_iframe_ready};
 
@@ -116,41 +111,62 @@ fn MenuItem(index: usize, entry: &'static ComponentEntry) -> Element {
 
 #[component]
 fn ComponentView(entry: &'static ComponentEntry) -> Element {
-	// Initialise values from the component's own defaults.
-	let values: Signal<Vec<Option<Value>>> = use_signal(entry.default_values);
-
-	// src is fixed for the lifetime of this ComponentView instance (the `key`
-	// on the call site ensures a fresh mount whenever `entry` changes).
-	// We include the initial default values so the iframe can render correctly
-	// even before the first postMessage arrives.
-	let src = {
-		let initial_json = serde_json::to_string(&(entry.default_values)()).unwrap_or_default();
-		Route::ComponentPage {
-			name: entry.name.to_string(),
-			props: initial_json,
-		}
-		.to_string()
-	};
-
-	// Becomes true when the iframe sends its Ready message (WASM rendered,
-	// CSS applied). Controls visibility to eliminate the FOUC.
 	let iframe_ready = use_iframe_ready();
 	let sender = IframeSender;
-
-	// Send current values whenever the iframe becomes ready or values change.
-	use_effect(move || {
-		let is_ready = iframe_ready();
-		let vals = values.read().clone();
-		if is_ready {
-			sender.send_values(&vals);
-		}
-	});
 
 	let iframe_style = if iframe_ready() {
 		"flex:1;width:100%;height:100%;border:none;transition:opacity 150ms ease;opacity:1;"
 	} else {
 		"flex:1;width:100%;height:100%;border:none;transition:opacity 150ms ease;opacity:0;"
 	};
+
+	let context = provide_context(Rc::new(PropertiesContext {
+		properties: entry
+			.properties
+			.iter()
+			.map(|prop| PropertyState {
+				value: use_signal(|| {
+					(prop.default_value)().unwrap_or_else(|| prop.r#type.default_value())
+				}),
+				enabled: use_signal(|| prop.required),
+			})
+			.collect(),
+	}));
+
+	// Memo that combines the stable values with the enabled flags to produce
+	// the Vec<Option<Value>> that the iframe expects.
+	let combined = use_memo(move || {
+		context
+			.properties
+			.iter()
+			.map(|state| {
+				if (state.enabled)() {
+					Some((state.value)())
+				} else {
+					None
+				}
+			})
+			.collect::<Vec<_>>()
+	});
+
+	// Initial iframe URL — uses the default optional values; subsequent changes
+	// are pushed via postMessage without reloading the iframe.
+	let src = {
+		let json = serde_json::to_string(&*combined.peek()).unwrap_or_default();
+		Route::ComponentPage {
+			name: entry.name.to_string(),
+			props: json,
+		}
+		.to_string()
+	};
+
+	// Push the combined values to the iframe whenever they change and the
+	// iframe is ready.
+	use_effect(move || {
+		if iframe_ready() {
+			sender.send_values(&combined.read());
+		}
+	});
 
 	rsx! {
 		div {
@@ -162,18 +178,27 @@ fn ComponentView(entry: &'static ComponentEntry) -> Element {
 				style: iframe_style,
 			}
 
-			ComponentProperties { entry, values }
+			ComponentProperties { entry }
 		}
 	}
 }
 
 // ── ComponentProperties ───────────────────────────────────────────────────────
 
+#[derive(Clone, Copy, PartialEq)]
+struct PropertyState {
+	value: Signal<Value>,
+	enabled: Signal<bool>,
+}
+
+struct PropertiesContext {
+	properties: Vec<PropertyState>,
+}
+
 #[component]
-fn ComponentProperties(
-	entry: &'static ComponentEntry,
-	values: Signal<Vec<Option<Value>>>,
-) -> Element {
+fn ComponentProperties(entry: &'static ComponentEntry) -> Element {
+	let context: Rc<PropertiesContext> = use_context();
+
 	if entry.properties.is_empty() {
 		return rsx! {
 			div {
@@ -194,8 +219,11 @@ fn ComponentProperties(
 
 			div {
 				style: "padding:8px 0;",
-				for (index, prop) in entry.properties.iter().enumerate() {
-					PropertyEditor { prop, index, values }
+				for (i, prop) in entry.properties.iter().enumerate() {
+					PropertyEditor {
+						prop,
+						state: context.properties[i]
+					}
 				}
 			}
 		}
@@ -205,12 +233,8 @@ fn ComponentProperties(
 // ── PropertyEditor ────────────────────────────────────────────────────────────
 
 #[component]
-fn PropertyEditor(
-	prop: &'static Property,
-	index: usize,
-	mut values: Signal<Vec<Option<Value>>>,
-) -> Element {
-	let enabled = use_memo(move || values.read().get(index).is_some_and(|v| v.is_some()));
+fn PropertyEditor(prop: &'static Property, state: PropertyState) -> Element {
+	let PropertyState { value, mut enabled } = state;
 
 	rsx! {
 		div {
@@ -232,13 +256,7 @@ fn PropertyEditor(
 						checked: enabled(),
 						style: "width:14px;height:14px;cursor:pointer;accent-color:#2563eb;",
 						onchange: move |e| {
-							if let Some(slot) = values.write().get_mut(index) {
-								*slot = if e.checked() {
-									Some(default_value(prop.r#type))
-								} else {
-									None
-								};
-							}
+							enabled.set(e.checked());
 						},
 					}
 				}
@@ -246,122 +264,40 @@ fn PropertyEditor(
 
 			if enabled() {
 				match prop.r#type {
-					Type::Bool => rsx! {
-						BoolEditor { index, values }
-					},
-					Type::String => rsx! {
-						StringEditor { index, values }
-					},
-					Type::Int(int_type) => rsx! {
-						IntEditor { index, int_type, values }
-					},
-					Type::Enum(enum_type) => rsx! {
-						EnumEditor { index, enum_type, values }
-					},
+					Type::Bool => rsx! { BoolPropertyEditor { value } },
+					Type::String => rsx! { StringPropertyEditor { value } },
+					Type::Int(int_type) => rsx! { IntPropertyEditor { int_type, value } },
+					Type::Enum(enum_type) => {
+						rsx! { EnumPropertyEditor { enum_type, value } }
+					}
 				}
 			}
 		}
 	}
 }
 
-// ── Field editors ─────────────────────────────────────────────────────────────
+// ── Per-type property editors (adapter → typed input) ─────────────────────────
 
 #[component]
-fn BoolEditor(index: usize, mut values: Signal<Vec<Option<Value>>>) -> Element {
-	let checked =
-		use_memo(move || matches!(values.read().get(index), Some(Some(Value::Bool(true)))));
-
-	rsx! {
-		label {
-			style: "display:flex;align-items:center;gap:8px;cursor:pointer;",
-			input {
-				r#type: "checkbox",
-				checked: checked(),
-				style: "width:16px;height:16px;cursor:pointer;accent-color:#2563eb;",
-				onchange: move |e| {
-					if let Some(slot) = values.write().get_mut(index) {
-							*slot = Some(Value::Bool(e.checked()));
-						}
-				},
-			}
-			span {
-				style: "font-size:13px;color:#111827;",
-				if checked() { "true" } else { "false" }
-			}
-		}
-	}
+fn BoolPropertyEditor(value: Signal<Value>) -> Element {
+	let value = use_bool_signal(value);
+	rsx! { BoolInput { value } }
 }
 
 #[component]
-fn StringEditor(index: usize, mut values: Signal<Vec<Option<Value>>>) -> Element {
-	let current = use_memo(move || match values.read().get(index) {
-		Some(Some(Value::String(s))) => s.clone(),
-		_ => String::new(),
-	});
-
-	rsx! {
-		input {
-			r#type: "text",
-			value: "{current}",
-			style: "width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;font-size:13px;outline:none;background:#fff;",
-			oninput: move |e| {
-				if let Some(slot) = values.write().get_mut(index) {
-						*slot = Some(Value::String(e.value()));
-					}
-			},
-		}
-	}
+fn StringPropertyEditor(value: Signal<Value>) -> Element {
+	let value = use_string_signal(value);
+	rsx! { StringInput { value } }
 }
 
 #[component]
-fn EnumEditor(
-	index: usize,
-	enum_type: EnumType,
-	mut values: Signal<Vec<Option<Value>>>,
-) -> Element {
-	let current = use_memo(move || match values.read().get(index) {
-		Some(Some(Value::Enum(i))) => *i as usize,
-		_ => 0,
-	});
-
-	rsx! {
-		select {
-			style: "width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;font-size:13px;outline:none;background:#fff;cursor:pointer;",
-			onchange: move |e| {
-				if let Ok(i) = e.value().parse::<u8>()
-					&& let Some(slot) = values.write().get_mut(index) {
-						*slot = Some(Value::Enum(i));
-					}
-			},
-			for (i, variant) in enum_type.variants.iter().enumerate() {
-				option {
-					value: "{i}",
-					selected: current() == i,
-					"{variant.name}"
-				}
-			}
-		}
-	}
+fn IntPropertyEditor(int_type: IntType, value: Signal<Value>) -> Element {
+	let value = use_int_signal(int_type, value);
+	rsx! { IntInput { value } }
 }
 
 #[component]
-fn IntEditor(index: usize, int_type: IntType, mut values: Signal<Vec<Option<Value>>>) -> Element {
-	let current = use_memo(move || match values.read().get(index) {
-		Some(Some(Value::Int(iv))) => iv.as_i128().to_string(),
-		_ => "0".to_string(),
-	});
-
-	rsx! {
-		input {
-			r#type: "number",
-			value: "{current}",
-			style: "width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;font-size:13px;outline:none;background:#fff;",
-			oninput: move |e| {
-				if let Ok(n) = e.value().parse::<i128>()
-					&& let Some(slot) = values.write().get_mut(index) {
-						*slot = Some(Value::Int(IntValue::from_i128(n, int_type)));
-					}
-			},
-		}
-	}
+fn EnumPropertyEditor(enum_type: EnumType, value: Signal<Value>) -> Element {
+	let value = use_enum_signal(value);
+	rsx! { EnumInput { variants: enum_type.variants, value } }
 }

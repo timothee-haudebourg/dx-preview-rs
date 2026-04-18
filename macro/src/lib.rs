@@ -15,7 +15,16 @@
 //! # What the macro generates
 //!
 //! For each annotated component the macro emits three items alongside the
-//! original function (all gated on `#[cfg(feature = "storybook")]`):
+//! original function (all gated on `#[cfg(feature = "preview")]`):
+//!
+//! The `crate` argument can be used when the macro is applied inside the
+//! `dx-preview` crate itself, to avoid the circular `::dx_preview` path:
+//!
+//! ```rust,ignore
+//! #[dx_preview::preview(crate = crate)]
+//! #[component]
+//! pub fn MyInput(…) -> Element { … }
+//! ```
 //!
 //! 1. A `static [Property; N]` array — one entry per *visible* parameter,
 //!    describing its name, reflected [`Type`](dx_preview::model::Type), and
@@ -35,6 +44,27 @@ use syn::{
 	Data, DeriveInput, Fields, FnArg, ItemFn, Pat, Token, Variant, parse::ParseStream,
 	parse_macro_input,
 };
+
+// ── Macro attribute args ──────────────────────────────────────────────────────
+
+struct PreviewArgs {
+	/// Override for the `dx_preview` crate path, e.g. `crate` when the macro
+	/// is used inside `dx-preview` itself.
+	krate: Option<syn::Path>,
+}
+
+impl syn::parse::Parse for PreviewArgs {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		if input.is_empty() {
+			return Ok(Self { krate: None });
+		}
+		// Accept `crate = <path>`.  The key is the `crate` keyword.
+		let _: Token![crate] = input.parse()?;
+		let _: Token![=] = input.parse()?;
+		let path: syn::Path = input.parse()?;
+		Ok(Self { krate: Some(path) })
+	}
+}
 
 // ── Attribute parsing ─────────────────────────────────────────────────────────
 
@@ -218,8 +248,20 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 /// | `#[preview(hide)]` | Hidden from UI; rendered with `Default::default()` |
 /// | `#[preview(hide, default = expr)]` | Hidden from UI; rendered with `expr` |
 ///
+/// # Crate path
+///
+/// When the macro is applied inside `dx-preview` itself, pass `crate = crate`
+/// so the generated code resolves to the local crate rather than an external
+/// `::dx_preview` path:
+///
+/// ```rust,ignore
+/// #[dx_preview::preview(crate = crate)]
+/// #[component]
+/// pub fn MyInput(…) -> Element { … }
+/// ```
+///
 /// # Example
-/// ```rust
+/// ```rust,ignore
 /// #[dx_preview::preview]
 /// #[component]
 /// pub fn MyButton(
@@ -229,7 +271,15 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 /// ) -> Element { ... }
 /// ```
 #[proc_macro_attribute]
-pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
+pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
+	let preview_args = parse_macro_input!(args as PreviewArgs);
+	let krate = preview_args
+		.krate
+		.map(|p| quote! { #p })
+		.unwrap_or_else(|| quote! { ::dx_preview });
+	// Convenience alias for the model module path used throughout.
+	let model = quote! { #krate::model };
+
 	let mut input_fn = parse_macro_input!(input as ItemFn);
 
 	let fn_name = input_fn.sig.ident.clone();
@@ -264,10 +314,6 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 		&format!("__dx_preview_props_{}", fn_name_str),
 		Span::call_site(),
 	);
-	let defaults_fn = Ident::new(
-		&format!("__dx_preview_defaults_{}", fn_name_str),
-		Span::call_site(),
-	);
 	let render_fn = Ident::new(
 		&format!("__dx_preview_render_{}", fn_name_str),
 		Span::call_site(),
@@ -278,31 +324,39 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 	let visible: Vec<&ParamInfo> = params.iter().filter(|p| !p.hidden).collect();
 	let visible_count = visible.len();
 
-	// static [Property; N] entries
+	// Per-property default functions and Property static entries.
+	let mut default_fns: Vec<TokenStream2> = Vec::new();
 	let prop_entries: Vec<TokenStream2> = visible
 		.iter()
-		.map(|p| {
+		.enumerate()
+		.map(|(i, p)| {
 			let name_str = p.name.to_string();
 			let ty = &p.ty;
-			quote! {
-				::dx_preview::model::Property {
-					name: #name_str,
-					r#type: <<#ty as ::dx_preview::model::PropertyType>::Type
-						as ::dx_preview::model::Reflect>::TYPE,
-					required: <#ty as ::dx_preview::model::PropertyType>::REQUIRED,
-				}
-			}
-		})
-		.collect();
-
-	// default_values fn body: one entry per visible param
-	let default_value_entries: Vec<TokenStream2> = visible
-		.iter()
-		.map(|p| {
-			let ty = &p.ty;
 			let default = p.default_tokens();
+
+			// Generate a named fn so it can be stored as a fn() -> Option<Value>.
+			let default_fn_name = Ident::new(
+				&format!("__dx_preview_default_{}_{}", fn_name_str, i),
+				Span::call_site(),
+			);
+
+			default_fns.push(quote! {
+				#[cfg(feature = "preview")]
+				#[doc(hidden)]
+				#[allow(non_snake_case)]
+				fn #default_fn_name() -> ::std::option::Option<#model::Value> {
+					<#ty as #model::PropertyType>::to_opt_value(&#default)
+				}
+			});
+
 			quote! {
-				<#ty as ::dx_preview::model::PropertyType>::to_opt_value(&#default)
+				#model::Property {
+					name: #name_str,
+					r#type: <<#ty as #model::PropertyType>::Type
+						as #model::Reflect>::TYPE,
+					required: <#ty as #model::PropertyType>::REQUIRED,
+					default_value: #default_fn_name,
+				}
 			}
 		})
 		.collect();
@@ -322,7 +376,7 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 			} else {
 				quote! {
 					let #name: #ty =
-						<#ty as ::dx_preview::model::PropertyType>::try_from_opt_value(
+						<#ty as #model::PropertyType>::try_from_opt_value(
 							__values.next().flatten(),
 						)
 						.unwrap_or_else(|_| #fallback);
@@ -347,27 +401,22 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 		// #[component] sees a clean signature.
 		#input_fn
 
-		// Everything below is only compiled when the `storybook` feature is
+		// Everything below is only compiled when the `preview` feature is
 		// active, which enables `dx-preview/app` and the book types.
-		#[cfg(feature = "storybook")]
+		#(#default_fns)*
+
+		#[cfg(feature = "preview")]
 		#[doc(hidden)]
 		#[allow(non_upper_case_globals)]
-		static #props_static: [::dx_preview::model::Property; #visible_count] = [
+		static #props_static: [#model::Property; #visible_count] = [
 			#(#prop_entries),*
 		];
 
-		#[cfg(feature = "storybook")]
-		#[doc(hidden)]
-		#[allow(non_snake_case)]
-		fn #defaults_fn() -> ::std::vec::Vec<::std::option::Option<::dx_preview::model::Value>> {
-			vec![#(#default_value_entries),*]
-		}
-
-		#[cfg(feature = "storybook")]
+		#[cfg(feature = "preview")]
 		#[doc(hidden)]
 		#[allow(non_snake_case)]
 		fn #render_fn(
-			values: ::std::vec::Vec<::std::option::Option<::dx_preview::model::Value>>,
+			values: ::std::vec::Vec<::std::option::Option<#model::Value>>,
 		) -> ::dioxus::prelude::Element {
 			use ::dioxus::prelude::*;
 			let mut __values = values.into_iter();
@@ -379,12 +428,11 @@ pub fn preview(_args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		}
 
-		#[cfg(feature = "storybook")]
-		::dx_preview::model::inventory::submit! {
-			::dx_preview::model::ComponentEntry {
+		#[cfg(feature = "preview")]
+		#model::inventory::submit! {
+			#model::ComponentEntry {
 				name: #fn_name_str,
 				properties: &#props_static,
-				default_values: #defaults_fn,
 				render: #render_fn,
 			}
 		}

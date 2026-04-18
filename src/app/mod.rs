@@ -14,6 +14,7 @@ mod channel;
 mod component;
 mod config;
 mod home;
+pub mod ui;
 
 pub use channel::{
 	IFRAME_ID, IframeSender, notify_parent_ready, use_iframe_ready, use_incoming_values,
