@@ -122,7 +122,7 @@
 
 pub use dx_preview_macro::preview;
 
-#[cfg(feature = "app")]
+#[cfg(feature = "model")]
 pub mod model;
 
 #[cfg(feature = "app")]
