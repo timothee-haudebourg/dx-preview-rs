@@ -1,5 +1,13 @@
 //! Proc-macro crate for [`dx-preview`](https://docs.rs/dx-preview).
 //!
+//! Provides two macros:
+//!
+//! - [`preview`] — attribute macro that registers a Dioxus component in the
+//!   `dx-preview` compile-time inventory.
+//! - [`Reflect`] — derive macro that implements
+//!   [`Reflect`](dx_preview::model::Reflect) for unit enum types, making them
+//!   usable as editable properties in the preview shell.
+//!
 //! Provides the [`preview`] attribute macro, which registers a Dioxus component
 //! in the `dx-preview` compile-time inventory and generates the plumbing needed
 //! by the interactive preview shell.
@@ -23,7 +31,10 @@
 use proc_macro::TokenStream;
 use proc_macro2::{Ident, Span, TokenStream as TokenStream2};
 use quote::quote;
-use syn::{FnArg, ItemFn, Pat, Token, parse::ParseStream, parse_macro_input};
+use syn::{
+	Data, DeriveInput, Fields, FnArg, ItemFn, Pat, Token, Variant, parse::ParseStream,
+	parse_macro_input,
+};
 
 // ── Attribute parsing ─────────────────────────────────────────────────────────
 
@@ -97,6 +108,94 @@ impl ParamInfo {
 			}
 		}
 	}
+}
+
+// ── Reflect derive ────────────────────────────────────────────────────────────
+
+/// Derives [`Reflect`](dx_preview::model::Reflect) for a **unit enum**.
+///
+/// Each variant is mapped to a `u8` index (in declaration order). The
+/// resulting [`Type`](dx_preview::model::Type) is
+/// [`Type::Enum`](dx_preview::model::Type::Enum), which the preview shell
+/// renders as a `<select>` dropdown.
+///
+/// # Panics
+///
+/// Compilation fails if:
+/// - The type is not an enum.
+/// - Any variant carries data fields.
+/// - The enum has more than 256 variants.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// #[derive(dx_preview::Reflect)]
+/// enum Color { Red, Green, Blue }
+/// ```
+#[proc_macro_derive(Reflect)]
+pub fn derive_reflect(input: TokenStream) -> TokenStream {
+	let input = parse_macro_input!(input as DeriveInput);
+
+	let name = &input.ident;
+	let name_str = name.to_string();
+
+	let Data::Enum(data) = &input.data else {
+		return syn::Error::new_spanned(&input, "`Reflect` can only be derived for enums")
+			.to_compile_error()
+			.into();
+	};
+
+	let variants: Vec<&Variant> = data.variants.iter().collect();
+
+	for variant in &variants {
+		if !matches!(variant.fields, Fields::Unit) {
+			return syn::Error::new_spanned(
+				variant,
+				"`Reflect` only supports unit enum variants (no fields)",
+			)
+			.to_compile_error()
+			.into();
+		}
+	}
+
+	if variants.len() > 256 {
+		return syn::Error::new_spanned(&input, "`Reflect` supports at most 256 enum variants")
+			.to_compile_error()
+			.into();
+	}
+
+	let variant_names: Vec<String> = variants.iter().map(|v| v.ident.to_string()).collect();
+	let variant_idents: Vec<&Ident> = variants.iter().map(|v| &v.ident).collect();
+	let variant_indices: Vec<u8> = (0u8..variants.len() as u8).collect();
+
+	quote! {
+		impl ::dx_preview::model::Reflect for #name {
+			const TYPE: ::dx_preview::model::Type = ::dx_preview::model::Type::Enum(
+				::dx_preview::model::EnumType {
+					name: #name_str,
+					variants: &[
+						#( ::dx_preview::model::EnumVariant { name: #variant_names } ),*
+					],
+				},
+			);
+
+			fn to_value(&self) -> ::dx_preview::model::Value {
+				::dx_preview::model::Value::Enum(match self {
+					#( Self::#variant_idents => #variant_indices, )*
+				})
+			}
+
+			fn try_from_value(
+				value: ::dx_preview::model::Value,
+			) -> Result<Self, ::dx_preview::model::TypeError> {
+				match value {
+					#( ::dx_preview::model::Value::Enum(#variant_indices) => Ok(Self::#variant_idents), )*
+					_ => Err(::dx_preview::model::TypeError::InvalidValue),
+				}
+			}
+		}
+	}
+	.into()
 }
 
 // ── Proc macro ────────────────────────────────────────────────────────────────

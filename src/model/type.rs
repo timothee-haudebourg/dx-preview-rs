@@ -1,13 +1,14 @@
 use super::{IntValue, Value};
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Type {
 	Bool,
 	Int(IntType),
 	String,
+	Enum(EnumType),
 }
 
-#[derive(Copy, Clone, PartialEq)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum IntType {
 	U8,
 	U16,
@@ -17,6 +18,17 @@ pub enum IntType {
 	I16,
 	I32,
 	I64,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EnumType {
+	pub name: &'static str,
+	pub variants: &'static [EnumVariant],
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct EnumVariant {
+	pub name: &'static str,
 }
 
 #[derive(Copy, Clone)]

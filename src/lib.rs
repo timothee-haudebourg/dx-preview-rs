@@ -120,7 +120,7 @@
 //! dx serve --features storybook --bin storybook --platform web
 //! ```
 
-pub use dx_preview_macro::preview;
+pub use dx_preview_macro::{Reflect, preview};
 
 #[cfg(feature = "model")]
 pub mod model;

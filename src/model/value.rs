@@ -5,6 +5,7 @@ pub enum Value {
 	Bool(bool),
 	Int(IntValue),
 	String(String),
+	Enum(u8),
 }
 
 #[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]

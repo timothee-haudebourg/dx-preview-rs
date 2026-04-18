@@ -2,13 +2,14 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
-use crate::model::{ComponentEntry, IntType, IntValue, Property, Type, Value};
+use crate::model::{ComponentEntry, EnumType, IntType, IntValue, Property, Type, Value};
 
 fn default_value(t: Type) -> Value {
 	match t {
 		Type::Bool => Value::Bool(false),
 		Type::String => Value::String(String::new()),
 		Type::Int(int_type) => Value::Int(IntValue::from_i128(0, int_type)),
+		Type::Enum(_) => Value::Enum(0),
 	}
 }
 
@@ -254,6 +255,9 @@ fn PropertyEditor(
 					Type::Int(int_type) => rsx! {
 						IntEditor { index, int_type, values }
 					},
+					Type::Enum(enum_type) => rsx! {
+						EnumEditor { index, enum_type, values }
+					},
 				}
 			}
 		}
@@ -305,6 +309,37 @@ fn StringEditor(index: usize, mut values: Signal<Vec<Option<Value>>>) -> Element
 						*slot = Some(Value::String(e.value()));
 					}
 			},
+		}
+	}
+}
+
+#[component]
+fn EnumEditor(
+	index: usize,
+	enum_type: EnumType,
+	mut values: Signal<Vec<Option<Value>>>,
+) -> Element {
+	let current = use_memo(move || match values.read().get(index) {
+		Some(Some(Value::Enum(i))) => *i as usize,
+		_ => 0,
+	});
+
+	rsx! {
+		select {
+			style: "width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;font-size:13px;outline:none;background:#fff;cursor:pointer;",
+			onchange: move |e| {
+				if let Ok(i) = e.value().parse::<u8>()
+					&& let Some(slot) = values.write().get_mut(index) {
+						*slot = Some(Value::Enum(i));
+					}
+			},
+			for (i, variant) in enum_type.variants.iter().enumerate() {
+				option {
+					value: "{i}",
+					selected: current() == i,
+					"{variant.name}"
+				}
+			}
 		}
 	}
 }
