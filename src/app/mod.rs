@@ -10,15 +10,12 @@
 
 use dioxus::prelude::*;
 
-mod channel;
 mod component;
 mod config;
 mod home;
+pub mod protocol;
 pub mod ui;
 
-pub use channel::{
-	IFRAME_ID, IframeSender, notify_parent_ready, use_iframe_ready, use_incoming_values,
-};
 use component::ComponentPage;
 pub use config::Config;
 use home::Home;
@@ -37,6 +34,7 @@ pub fn launch(config: Config) {
 enum Route {
     #[route("/")]
     Home {},
+
     #[route("/component/:name?:props")]
     ComponentPage { name: String, props: String },
 }

@@ -6,9 +6,12 @@ use super::ui::input::{
 	BoolInput, EnumInput, IntInput, StringInput,
 	adapter::{use_bool_signal, use_enum_signal, use_int_signal, use_string_signal},
 };
-use crate::model::{ComponentEntry, EnumType, IntType, Property, Type, Value};
+use crate::{
+	app::protocol::{set_child_value, use_parent},
+	model::{ComponentEntry, EnumType, IntType, Property, Type, Value},
+};
 
-use super::{IFRAME_ID, IframeSender, Route, use_iframe_ready};
+use super::{Route, protocol::CHILD_ID};
 
 // ── Context ───────────────────────────────────────────────────────────────────
 
@@ -111,8 +114,7 @@ fn MenuItem(index: usize, entry: &'static ComponentEntry) -> Element {
 
 #[component]
 fn ComponentView(entry: &'static ComponentEntry) -> Element {
-	let iframe_ready = use_iframe_ready();
-	let sender = IframeSender;
+	let iframe_ready = use_parent();
 
 	let iframe_style = if iframe_ready() {
 		"flex:1;width:100%;height:100%;border:none;transition:opacity 150ms ease;opacity:1;"
@@ -124,35 +126,45 @@ fn ComponentView(entry: &'static ComponentEntry) -> Element {
 		properties: entry
 			.properties
 			.iter()
-			.map(|prop| PropertyState {
-				value: use_signal(|| {
-					(prop.default_value)().unwrap_or_else(|| prop.r#type.default_value())
-				}),
-				enabled: use_signal(|| prop.required),
+			.enumerate()
+			.map(|(i, prop)| {
+				let state = PropertyState {
+					value: use_signal(|| {
+						(prop.default_value)().unwrap_or_else(|| prop.r#type.default_value())
+					}),
+					enabled: use_signal(|| prop.required),
+				};
+
+				// Push the value to the iframe whenever it changes and the
+				// iframe is ready.
+				use_effect(move || {
+					if iframe_ready() {
+						set_child_value(i, (state.enabled)().then(|| (state.value)()));
+					}
+				});
+
+				state
 			})
 			.collect(),
 	}));
 
-	// Memo that combines the stable values with the enabled flags to produce
-	// the Vec<Option<Value>> that the iframe expects.
-	let combined = use_memo(move || {
-		context
+	// Initial iframe URL — uses the default optional values; subsequent changes
+	// are pushed via postMessage without reloading the iframe.
+	let src = {
+		let combined = context
 			.properties
 			.iter()
 			.map(|state| {
-				if (state.enabled)() {
-					Some((state.value)())
+				if *state.enabled.peek() {
+					Some(state.value.peek().cloned())
 				} else {
 					None
 				}
 			})
-			.collect::<Vec<_>>()
-	});
+			.collect::<Vec<_>>();
 
-	// Initial iframe URL — uses the default optional values; subsequent changes
-	// are pushed via postMessage without reloading the iframe.
-	let src = {
-		let json = serde_json::to_string(&*combined.peek()).unwrap_or_default();
+		let json = serde_json::to_string(&combined).unwrap_or_default();
+
 		Route::ComponentPage {
 			name: entry.name.to_string(),
 			props: json,
@@ -160,20 +172,12 @@ fn ComponentView(entry: &'static ComponentEntry) -> Element {
 		.to_string()
 	};
 
-	// Push the combined values to the iframe whenever they change and the
-	// iframe is ready.
-	use_effect(move || {
-		if iframe_ready() {
-			sender.send_values(&combined.read());
-		}
-	});
-
 	rsx! {
 		div {
 			style: "height:100%;display:flex;",
 
 			iframe {
-				id: IFRAME_ID,
+				id: CHILD_ID,
 				src: "{src}",
 				style: iframe_style,
 			}

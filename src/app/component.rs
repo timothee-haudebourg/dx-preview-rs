@@ -1,8 +1,11 @@
 use dioxus::prelude::*;
 
-use crate::model::ComponentEntry;
+use crate::{
+	app::protocol::{notify_child_ready, use_child},
+	model::ComponentEntry,
+};
 
-use super::{config, notify_parent_ready, use_incoming_values};
+use super::config;
 
 const STYLE: Asset = asset!("assets/component.css");
 
@@ -23,7 +26,7 @@ pub fn ComponentPage(name: String, props: String) -> Element {
 
 #[component]
 fn ComponentBody(name: String, props: String) -> Element {
-	let values = use_incoming_values(|| {
+	let values = use_child(|| {
 		serde_json::from_str(&props).unwrap_or_else(|_| {
 			inventory::iter::<ComponentEntry>
 				.into_iter()
@@ -35,7 +38,7 @@ fn ComponentBody(name: String, props: String) -> Element {
 
 	// Notify the parent that WASM has rendered and the iframe is ready to be
 	// shown. Runs once after the first render (use_hook is not reactive).
-	use_hook(notify_parent_ready);
+	use_hook(notify_child_ready);
 
 	for entry in inventory::iter::<ComponentEntry> {
 		if entry.name == name {
