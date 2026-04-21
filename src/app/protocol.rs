@@ -9,29 +9,58 @@ use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
 use web_sys::{HtmlIFrameElement, MessageEvent, Window};
 
-use crate::model::Value;
+use crate::model::{
+	ReactiveValue, ReactiveValueId, Value, ValueSource, provide_signal_value_context,
+};
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 enum ParentMessage {
-	Set(usize, Option<Value>),
+	Set(usize, Value),
+	/// Parent wrote a new value to a reactive signal.
+	WriteSignal {
+		id: ReactiveValueId,
+		value: Value,
+	},
 }
 
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "type", content = "data")]
 enum ChildMessage {
 	Ready,
+	Set(usize, Value),
+	/// Child wrote a new value to a reactive signal.
+	WriteSignal {
+		id: ReactiveValueId,
+		value: Value,
+	},
 }
 
-pub fn use_child(
-	initial_values: impl FnOnce() -> Vec<Option<Value>>,
-) -> Signal<Vec<Option<Value>>> {
+pub fn use_child(initial_values: impl FnOnce() -> Vec<Value>) -> Signal<Vec<Value>> {
 	let mut values = use_signal(initial_values);
 
-	use_message(move |message| match message {
-		ParentMessage::Set(i, value) => {
-			if let Some(v) = values.write().get_mut(i) {
-				*v = value
+	provide_signal_value_context(ValueSource::Child, |id, value| {
+		if let Some(parent) = parent_window() {
+			post_message(
+				&parent,
+				ChildMessage::WriteSignal {
+					id,
+					value: value.clone(),
+				},
+			);
+		}
+	});
+
+	use_message({
+		move |message| match message {
+			ParentMessage::Set(i, value) => {
+				let mut values = values.write();
+				if let Some(s) = values.get_mut(i) {
+					*s = value;
+				}
+			}
+			ParentMessage::WriteSignal { id, value } => {
+				ReactiveValue { id }.write_silent(value);
 			}
 		}
 	});
@@ -40,10 +69,30 @@ pub fn use_child(
 }
 
 pub fn use_parent() -> Signal<bool> {
+	provide_signal_value_context(ValueSource::Parent, |id, value| {
+		if let Some(child) = child_window() {
+			post_message(
+				&child,
+				ParentMessage::WriteSignal {
+					id,
+					value: value.clone(),
+				},
+			);
+		}
+	});
+
 	let mut ready = use_signal(|| false);
 
-	use_message(move |message| match message {
-		ChildMessage::Ready => ready.set(true),
+	use_message({
+		move |message| match message {
+			ChildMessage::Ready => ready.set(true),
+			ChildMessage::Set(_, _) => {
+				// TODO: propagate child-initiated property value updates to the parent
+			}
+			ChildMessage::WriteSignal { id, value } => {
+				ReactiveValue { id }.write_silent(value);
+			}
+		}
 	});
 
 	ready
@@ -118,8 +167,14 @@ fn child_window() -> Option<Window> {
 		.content_window()
 }
 
-pub fn set_child_value(i: usize, value: Option<Value>) {
+pub fn set_child_value(i: usize, value: Value) {
 	let Some(child) = child_window() else { return };
 
 	post_message(&child, ParentMessage::Set(i, value));
+}
+
+pub fn set_parent_value(i: usize, value: Value) {
+	let Some(child) = parent_window() else { return };
+
+	post_message(&child, ChildMessage::Set(i, value));
 }

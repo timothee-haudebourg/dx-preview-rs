@@ -1,4 +1,6 @@
-use super::{IntValue, Value};
+use dioxus::signals::Signal;
+
+use super::{IntValue, ReactiveValue, Value};
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Type {
@@ -6,6 +8,8 @@ pub enum Type {
 	Int(IntType),
 	String,
 	Enum(EnumType),
+	Option(&'static Self),
+	Signal(&'static Self),
 }
 
 impl Type {
@@ -15,6 +19,8 @@ impl Type {
 			Self::Int(t) => Value::Int(t.default_value()),
 			Self::String => Value::String(String::new()),
 			Self::Enum(t) => Value::Enum(t.default_value()),
+			Self::Option(_) => Value::Option(None),
+			Self::Signal(t) => Value::Signal(ReactiveValue::new(t.default_value())),
 		}
 	}
 }
@@ -73,7 +79,7 @@ pub enum TypeError {
 pub trait Reflect: Sized {
 	const TYPE: Type;
 
-	fn to_value(&self) -> Value;
+	fn to_value(self) -> Value;
 
 	fn try_from_value(value: Value) -> Result<Self, TypeError>;
 }
@@ -81,8 +87,8 @@ pub trait Reflect: Sized {
 impl Reflect for bool {
 	const TYPE: Type = Type::Bool;
 
-	fn to_value(&self) -> Value {
-		Value::Bool(*self)
+	fn to_value(self) -> Value {
+		Value::Bool(self)
 	}
 
 	fn try_from_value(value: Value) -> Result<Self, TypeError> {
@@ -96,8 +102,8 @@ impl Reflect for bool {
 impl Reflect for String {
 	const TYPE: Type = Type::String;
 
-	fn to_value(&self) -> Value {
-		Value::String(self.clone())
+	fn to_value(self) -> Value {
+		Value::String(self)
 	}
 
 	fn try_from_value(value: Value) -> Result<Self, TypeError> {
@@ -108,13 +114,50 @@ impl Reflect for String {
 	}
 }
 
+impl<T> Reflect for Option<T>
+where
+	T: Reflect,
+{
+	const TYPE: Type = Type::Option(&T::TYPE);
+
+	fn to_value(self) -> Value {
+		Value::Option(self.map(|t| Box::new(t.to_value())))
+	}
+
+	fn try_from_value(value: Value) -> Result<Self, TypeError> {
+		match value {
+			Value::Option(Some(t)) => Ok(Some(T::try_from_value(*t)?)),
+			Value::Option(None) => Ok(None),
+			_ => Err(TypeError::InvalidType),
+		}
+	}
+}
+
+impl<T> Reflect for Signal<T>
+where
+	T: 'static + PartialEq + Reflect + Clone,
+{
+	const TYPE: Type = Type::Signal(&T::TYPE);
+
+	fn to_value(self) -> Value {
+		Value::Signal(ReactiveValue::use_from_signal::<T>(self))
+	}
+
+	fn try_from_value(value: Value) -> Result<Self, TypeError> {
+		match value {
+			Value::Signal(rv) => Ok(rv.use_adapter::<T>()),
+			_ => Err(TypeError::InvalidType),
+		}
+	}
+}
+
 macro_rules! impl_showcase_int {
 	($prim:ty, $int_type:ident, $int_value:ident) => {
 		impl Reflect for $prim {
 			const TYPE: Type = Type::Int(IntType::$int_type);
 
-			fn to_value(&self) -> Value {
-				Value::Int(IntValue::$int_value(*self))
+			fn to_value(self) -> Value {
+				Value::Int(IntValue::$int_value(self))
 			}
 
 			fn try_from_value(value: Value) -> Result<Self, TypeError> {

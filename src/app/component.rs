@@ -42,7 +42,7 @@ fn ComponentBody(name: String, props: String) -> Element {
 
 	for entry in inventory::iter::<ComponentEntry> {
 		if entry.name == name {
-			return (entry.render)(values.read().clone());
+			return (entry.render)(values());
 		}
 	}
 

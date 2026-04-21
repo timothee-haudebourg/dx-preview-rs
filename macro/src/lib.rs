@@ -29,9 +29,9 @@
 //! 1. A `static [Property; N]` array — one entry per *visible* parameter,
 //!    describing its name, reflected [`Type`](dx_preview::model::Type), and
 //!    whether it is required.
-//! 2. A `fn() -> Vec<Option<Value>>` — returns the default value (or `None` for
-//!    optional properties that default to absent) for each visible parameter.
-//! 3. A `fn(Vec<Option<Value>>) -> Element` — reconstructs the component props
+//! 2. A `fn() -> Vec<Value>` — returns the default value for each visible
+//!    parameter.
+//! 3. A `fn(Vec<Value>) -> Element` — reconstructs the component props
 //!    from the supplied values and calls the component.
 //!
 //! These are registered via `inventory::submit!` so that the shell can discover
@@ -44,6 +44,26 @@ use syn::{
 	Data, DeriveInput, Fields, FnArg, ItemFn, Pat, Token, Variant, parse::ParseStream,
 	parse_macro_input,
 };
+
+// ── Option<T> helper ──────────────────────────────────────────────────────────
+
+/// If `ty` is `Option<T>`, returns the inner type `T`; otherwise returns `None`.
+fn extract_option_inner(ty: &syn::Type) -> Option<syn::Type> {
+	let syn::Type::Path(type_path) = ty else {
+		return None;
+	};
+	let seg = type_path.path.segments.last()?;
+	if seg.ident != "Option" {
+		return None;
+	}
+	let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
+		return None;
+	};
+	let syn::GenericArgument::Type(inner) = args.args.first()? else {
+		return None;
+	};
+	Some(inner.clone())
+}
 
 // ── Macro attribute args ──────────────────────────────────────────────────────
 
@@ -121,6 +141,8 @@ fn take_preview_attrs(attrs: &mut Vec<syn::Attribute>) -> DemoAttrs {
 struct ParamInfo {
 	name: Ident,
 	ty: syn::Type,
+	/// When `ty` is `Option<T>`, holds the inner type `T`; otherwise `None`.
+	inner_ty: Option<syn::Type>,
 	/// Exclude from `properties` / `default_values`; use default in render.
 	hidden: bool,
 	/// Explicit default expression (used both in UI defaults and render fallback).
@@ -209,7 +231,7 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 				},
 			);
 
-			fn to_value(&self) -> ::dx_preview::model::Value {
+			fn to_value(self) -> ::dx_preview::model::Value {
 				::dx_preview::model::Value::Enum(match self {
 					#( Self::#variant_idents => #variant_indices, )*
 				})
@@ -243,7 +265,7 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 ///
 /// | Attribute | Meaning |
 /// |---|---|
-/// | *(none)* | Visible; type must implement `ShowcaseType`; default via `Default::default()` |
+/// | *(none)* | Visible; type must implement `Reflect`; default via `Default::default()` |
 /// | `#[preview(default = expr)]` | Visible; use `expr` as default |
 /// | `#[preview(hide)]` | Hidden from UI; rendered with `Default::default()` |
 /// | `#[preview(hide, default = expr)]` | Hidden from UI; rendered with `expr` |
@@ -299,9 +321,11 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 			};
 			let ty = (*pat_type.ty).clone();
 			let demo = take_preview_attrs(&mut pat_type.attrs);
+			let inner_ty = extract_option_inner(&ty);
 			params.push(ParamInfo {
 				name,
 				ty,
+				inner_ty,
 				hidden: demo.hidden,
 				default_expr: demo.default_expr,
 			});
@@ -334,27 +358,47 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 			let ty = &p.ty;
 			let default = p.default_tokens();
 
-			// Generate a named fn so it can be stored as a fn() -> Option<Value>.
+			// Generate a named fn so it can be stored as a fn() -> Value.
 			let default_fn_name = Ident::new(
 				&format!("__dx_preview_default_{}_{}", fn_name_str, i),
 				Span::call_site(),
 			);
 
-			default_fns.push(quote! {
-				#[cfg(feature = "preview")]
-				#[doc(hidden)]
-				#[allow(non_snake_case)]
-				fn #default_fn_name() -> ::std::option::Option<#model::Value> {
-					<#ty as #model::PropertyType>::to_opt_value(&#default)
-				}
-			});
+			if let Some(inner) = &p.inner_ty {
+				// Optional property: wrap default in Value::Option
+				default_fns.push(quote! {
+					#[cfg(feature = "preview")]
+					#[doc(hidden)]
+					#[allow(non_snake_case)]
+					fn #default_fn_name() -> #model::Value {
+						#model::Value::Option((#default).as_ref().map(|__t| {
+							::std::boxed::Box::new(<#inner as #model::Reflect>::to_value(__t.clone()))
+						}))
+					}
+				});
+			} else {
+				// Required property: call Reflect::to_value directly
+				default_fns.push(quote! {
+					#[cfg(feature = "preview")]
+					#[doc(hidden)]
+					#[allow(non_snake_case)]
+					fn #default_fn_name() -> #model::Value {
+						<#ty as #model::Reflect>::to_value(#default)
+					}
+				});
+			}
+
+			let (reflect_ty, required) = if let Some(inner) = &p.inner_ty {
+				(quote! { #inner }, quote! { false })
+			} else {
+				(quote! { #ty }, quote! { true })
+			};
 
 			quote! {
 				#model::Property {
 					name: #name_str,
-					r#type: <<#ty as #model::PropertyType>::Type
-						as #model::Reflect>::TYPE,
-					required: <#ty as #model::PropertyType>::REQUIRED,
+					r#type: <#reflect_ty as #model::Reflect>::TYPE,
+					required: #required,
 					default_value: #default_fn_name,
 				}
 			}
@@ -376,8 +420,8 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 			} else {
 				quote! {
 					let #name: #ty =
-						<#ty as #model::PropertyType>::try_from_opt_value(
-							__values.next().flatten(),
+						<#ty as #model::Reflect>::try_from_value(
+							__values.next().unwrap_or(#model::Value::Option(None)),
 						)
 						.unwrap_or_else(|_| #fallback);
 				}
@@ -416,7 +460,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 		#[doc(hidden)]
 		#[allow(non_snake_case)]
 		fn #render_fn(
-			values: ::std::vec::Vec<::std::option::Option<#model::Value>>,
+			values: ::std::vec::Vec<#model::Value>,
 		) -> ::dioxus::prelude::Element {
 			use ::dioxus::prelude::*;
 			let mut __values = values.into_iter();

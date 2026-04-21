@@ -4,7 +4,6 @@
 //! the [`preview`](crate::preview) attribute macro and collected via
 //! [`inventory`]. The shell iterates over all collected entries to populate the
 //! sidebar and property editor.
-
 pub use inventory;
 
 mod property;
@@ -28,8 +27,12 @@ pub struct ComponentEntry {
 	pub properties: &'static [Property],
 
 	/// Render the component with the given properties.
-	pub render: fn(Vec<Option<Value>>) -> dioxus::prelude::Element,
+	pub render: fn(Vec<Value>) -> dioxus::prelude::Element,
 }
+
+/// Callback function called when the component changed a property value by
+/// itself. For instance when an input property is a signal.
+pub type PropertyUpdate = Box<dyn 'static + FnMut(usize, Value)>;
 
 impl PartialEq for ComponentEntry {
 	fn eq(&self, other: &Self) -> bool {

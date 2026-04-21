@@ -1,14 +1,24 @@
 use super::IntType;
 
-#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+pub mod signal;
+pub mod source;
+
+pub use signal::*;
+pub use source::*;
+
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Value {
 	Bool(bool),
 	Int(IntValue),
 	String(String),
 	Enum(u8),
+	/// An optional value; `None` means the property is absent.
+	Option(Option<Box<Value>>),
+	/// A reactive value shared between the child and parent windows.
+	Signal(ReactiveValue),
 }
 
-#[derive(Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum IntValue {
 	U8(u8),
 	U16(u16),

@@ -75,7 +75,7 @@
 //! impl ShowcaseType for Radius {
 //!     const TYPE: Type = Type::Int(IntType::U32);
 //!
-//!     fn to_value(&self) -> Value {
+//!     fn to_value(self) -> Value {
 //!         Value::Int(dx_preview::model::IntValue::U32(self.0))
 //!     }
 //!

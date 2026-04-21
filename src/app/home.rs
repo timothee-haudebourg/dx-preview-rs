@@ -8,7 +8,7 @@ use super::ui::input::{
 };
 use crate::{
 	app::protocol::{set_child_value, use_parent},
-	model::{ComponentEntry, EnumType, IntType, Property, Type, Value},
+	model::{ComponentEntry, EnumType, IntType, Property, ReactiveValue, Type, Value},
 };
 
 use super::{Route, protocol::CHILD_ID};
@@ -129,8 +129,10 @@ fn ComponentView(entry: &'static ComponentEntry) -> Element {
 			.enumerate()
 			.map(|(i, prop)| {
 				let state = PropertyState {
-					value: use_signal(|| {
-						(prop.default_value)().unwrap_or_else(|| prop.r#type.default_value())
+					value: use_signal(|| match (prop.default_value)() {
+						Value::Option(Some(v)) => *v,
+						Value::Option(None) => prop.r#type.default_value(),
+						v => v,
 					}),
 					enabled: use_signal(|| prop.required),
 				};
@@ -139,7 +141,12 @@ fn ComponentView(entry: &'static ComponentEntry) -> Element {
 				// iframe is ready.
 				use_effect(move || {
 					if iframe_ready() {
-						set_child_value(i, (state.enabled)().then(|| (state.value)()));
+						let value = if prop.required {
+							(state.value)()
+						} else {
+							Value::Option((state.enabled)().then(|| Box::new((state.value)())))
+						};
+						set_child_value(i, value);
 					}
 				});
 
@@ -151,14 +158,17 @@ fn ComponentView(entry: &'static ComponentEntry) -> Element {
 	// Initial iframe URL — uses the default optional values; subsequent changes
 	// are pushed via postMessage without reloading the iframe.
 	let src = {
-		let combined = context
+		let combined = entry
 			.properties
 			.iter()
-			.map(|state| {
-				if *state.enabled.peek() {
-					Some(state.value.peek().cloned())
+			.zip(context.properties.iter())
+			.map(|(prop, state)| {
+				if prop.required {
+					state.value.peek().cloned()
 				} else {
-					None
+					Value::Option(
+						(*state.enabled.peek()).then(|| Box::new(state.value.peek().cloned())),
+					)
 				}
 			})
 			.collect::<Vec<_>>();
@@ -267,16 +277,24 @@ fn PropertyEditor(prop: &'static Property, state: PropertyState) -> Element {
 			}
 
 			if enabled() {
-				match prop.r#type {
-					Type::Bool => rsx! { BoolPropertyEditor { value } },
-					Type::String => rsx! { StringPropertyEditor { value } },
-					Type::Int(int_type) => rsx! { IntPropertyEditor { int_type, value } },
-					Type::Enum(enum_type) => {
-						rsx! { EnumPropertyEditor { enum_type, value } }
-					}
-				}
+				ValueEditor { ty: &prop.r#type, value }
 			}
 		}
+	}
+}
+
+// ── ValueEditor: dispatch to the right per-type editor ────────────────────────
+
+/// Dispatch to the right typed editor based on `ty`.
+#[component]
+fn ValueEditor(ty: &'static Type, value: Signal<Value>) -> Element {
+	match ty {
+		Type::Bool => rsx! { BoolPropertyEditor { value } },
+		Type::String => rsx! { StringPropertyEditor { value } },
+		Type::Int(int_type) => rsx! { IntPropertyEditor { int_type: *int_type, value } },
+		Type::Enum(enum_type) => rsx! { EnumPropertyEditor { enum_type: *enum_type, value } },
+		Type::Option(inner) => rsx! { OptionPropertyEditor { inner, value } },
+		Type::Signal(inner) => rsx! { SignalPropertyEditor { inner, value } },
 	}
 }
 
@@ -304,4 +322,79 @@ fn IntPropertyEditor(int_type: IntType, value: Signal<Value>) -> Element {
 fn EnumPropertyEditor(enum_type: EnumType, value: Signal<Value>) -> Element {
 	let value = use_enum_signal(value);
 	rsx! { EnumInput { variants: enum_type.variants, value } }
+}
+
+/// Editor for `Option<T>`: a checkbox to toggle Some/None, plus the inner
+/// editor when the value is Some.
+#[component]
+fn OptionPropertyEditor(inner: &'static Type, mut value: Signal<Value>) -> Element {
+	let mut is_some = use_signal(|| matches!(*value.peek(), Value::Option(Some(_))));
+
+	let inner_value = use_signal(|| match value.peek().clone() {
+		Value::Option(Some(v)) => *v,
+		_ => inner.default_value(),
+	});
+
+	// (is_some, inner_value) → value
+	use_effect(move || {
+		value.set(if is_some() {
+			Value::Option(Some(Box::new(inner_value())))
+		} else {
+			Value::Option(None)
+		});
+	});
+
+	rsx! {
+		div {
+			style: "display:flex;align-items:center;gap:8px;",
+			input {
+				r#type: "checkbox",
+				checked: is_some(),
+				style: "width:14px;height:14px;cursor:pointer;accent-color:#2563eb;",
+				onchange: move |e| is_some.set(e.checked()),
+			}
+			if is_some() {
+				ValueEditor { ty: inner, value: inner_value }
+			}
+		}
+	}
+}
+
+/// Editor for `Signal<T>`: shows the inner editor with a ⚡ icon, bridging
+/// the property's [`Value::Signal`] to a plain [`Signal<Value>`] that the
+/// inner editor can read and write.
+#[component]
+fn SignalPropertyEditor(inner: &'static Type, value: Signal<Value>) -> Element {
+	let rv: ReactiveValue = match value.peek().clone() {
+		Value::Signal(rv) => rv,
+		_ => panic!("SignalPropertyEditor: expected Value::Signal"),
+	};
+
+	// Inner Signal<Value> that proxies the ReactiveValue.
+	let mut inner_value = use_signal(|| (*rv.read()).clone());
+
+	// ReactiveValue → inner_value: re-runs whenever the remote updates the signal.
+	use_effect(move || {
+		let new_val = (*rv.read()).clone();
+		if *inner_value.peek() != new_val {
+			inner_value.set(new_val);
+		}
+	});
+
+	// inner_value → ReactiveValue: local edits propagate to the remote.
+	use_effect(move || {
+		*rv.write() = inner_value();
+	});
+
+	rsx! {
+		div {
+			style: "display:flex;align-items:center;gap:6px;",
+			span {
+				style: "font-size:11px;color:#9ca3af;flex-shrink:0;",
+				title: "Reactive signal — changes are shared with the preview",
+				"⚡"
+			}
+			ValueEditor { ty: inner, value: inner_value }
+		}
+	}
 }

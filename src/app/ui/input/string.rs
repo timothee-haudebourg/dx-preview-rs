@@ -4,7 +4,7 @@ use dx_preview_macro::preview;
 #[preview(crate = crate)]
 /// A text input for a string property.
 #[component]
-pub fn StringInput(#[preview(hide)] value: Signal<String>) -> Element {
+pub fn StringInput(value: Signal<String>) -> Element {
 	rsx! {
 		input {
 			r#type: "text",
