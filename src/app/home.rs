@@ -287,7 +287,10 @@ fn PropertyEditor(prop: &'static Property, state: PropertyState) -> Element {
 
 /// Dispatch to the right typed editor based on `ty`.
 #[component]
-fn ValueEditor(ty: &'static Type, value: Signal<Value>) -> Element {
+fn ValueEditor<V>(ty: &'static Type, value: V) -> Element
+where
+	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+{
 	match ty {
 		Type::Bool => rsx! { BoolPropertyEditor { value } },
 		Type::String => rsx! { StringPropertyEditor { value } },
@@ -301,25 +304,37 @@ fn ValueEditor(ty: &'static Type, value: Signal<Value>) -> Element {
 // ── Per-type property editors (adapter → typed input) ─────────────────────────
 
 #[component]
-fn BoolPropertyEditor(value: Signal<Value>) -> Element {
+fn BoolPropertyEditor<V>(value: V) -> Element
+where
+	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+{
 	let value = use_bool_signal(value);
 	rsx! { BoolInput { value } }
 }
 
 #[component]
-fn StringPropertyEditor(value: Signal<Value>) -> Element {
+fn StringPropertyEditor<V>(value: V) -> Element
+where
+	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+{
 	let value = use_string_signal(value);
 	rsx! { StringInput { value } }
 }
 
 #[component]
-fn IntPropertyEditor(int_type: IntType, value: Signal<Value>) -> Element {
+fn IntPropertyEditor<V>(int_type: IntType, value: V) -> Element
+where
+	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+{
 	let value = use_int_signal(int_type, value);
 	rsx! { IntInput { value } }
 }
 
 #[component]
-fn EnumPropertyEditor(enum_type: EnumType, value: Signal<Value>) -> Element {
+fn EnumPropertyEditor<V>(enum_type: EnumType, value: V) -> Element
+where
+	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+{
 	let value = use_enum_signal(value);
 	rsx! { EnumInput { variants: enum_type.variants, value } }
 }
@@ -327,7 +342,10 @@ fn EnumPropertyEditor(enum_type: EnumType, value: Signal<Value>) -> Element {
 /// Editor for `Option<T>`: a checkbox to toggle Some/None, plus the inner
 /// editor when the value is Some.
 #[component]
-fn OptionPropertyEditor(inner: &'static Type, mut value: Signal<Value>) -> Element {
+fn OptionPropertyEditor<V>(inner: &'static Type, mut value: V) -> Element
+where
+	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+{
 	let mut is_some = use_signal(|| matches!(*value.peek(), Value::Option(Some(_))));
 
 	let inner_value = use_signal(|| match value.peek().clone() {
@@ -364,27 +382,30 @@ fn OptionPropertyEditor(inner: &'static Type, mut value: Signal<Value>) -> Eleme
 /// the property's [`Value::Signal`] to a plain [`Signal<Value>`] that the
 /// inner editor can read and write.
 #[component]
-fn SignalPropertyEditor(inner: &'static Type, value: Signal<Value>) -> Element {
-	let rv: ReactiveValue = match value.peek().clone() {
-		Value::Signal(rv) => rv,
+fn SignalPropertyEditor<V>(inner: &'static Type, value: V) -> Element
+where
+	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+{
+	let inner_value: ReactiveValue = match value.peek().clone() {
+		Value::Signal(inner_value) => inner_value,
 		_ => panic!("SignalPropertyEditor: expected Value::Signal"),
 	};
 
-	// Inner Signal<Value> that proxies the ReactiveValue.
-	let mut inner_value = use_signal(|| (*rv.read()).clone());
+	// // Inner Signal<Value> that proxies the ReactiveValue.
+	// let mut inner_value = use_signal(|| (*rv.read()).clone());
 
-	// ReactiveValue → inner_value: re-runs whenever the remote updates the signal.
-	use_effect(move || {
-		let new_val = (*rv.read()).clone();
-		if *inner_value.peek() != new_val {
-			inner_value.set(new_val);
-		}
-	});
+	// // ReactiveValue → inner_value: re-runs whenever the remote updates the signal.
+	// use_effect(move || {
+	// 	let new_val = (*rv.read()).clone();
+	// 	if *inner_value.peek() != new_val {
+	// 		inner_value.set(new_val);
+	// 	}
+	// });
 
-	// inner_value → ReactiveValue: local edits propagate to the remote.
-	use_effect(move || {
-		*rv.write() = inner_value();
-	});
+	// // inner_value → ReactiveValue: local edits propagate to the remote.
+	// use_effect(move || {
+	// 	*rv.write() = inner_value();
+	// });
 
 	rsx! {
 		div {

@@ -37,8 +37,6 @@ enum ChildMessage {
 }
 
 pub fn use_child(initial_values: impl FnOnce() -> Vec<Value>) -> Signal<Vec<Value>> {
-	let mut values = use_signal(initial_values);
-
 	provide_signal_value_context(ValueSource::Child, |id, value| {
 		if let Some(parent) = parent_window() {
 			post_message(
@@ -50,6 +48,8 @@ pub fn use_child(initial_values: impl FnOnce() -> Vec<Value>) -> Signal<Vec<Valu
 			);
 		}
 	});
+
+	let mut values = use_signal(initial_values);
 
 	use_message({
 		move |message| match message {

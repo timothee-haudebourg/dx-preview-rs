@@ -8,10 +8,12 @@ pub use inventory;
 
 mod property;
 mod r#type;
+mod util;
 mod value;
 
 pub use property::*;
 pub use r#type::*;
+pub use util::{Scoped, couple_signals};
 pub use value::*;
 
 /// A component registered at compile time by the [`preview`](crate::preview) attribute.

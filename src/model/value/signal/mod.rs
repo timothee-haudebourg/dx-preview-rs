@@ -1,17 +1,19 @@
 use std::{
 	hash::{Hash, Hasher},
-	marker::PhantomData,
 	rc::Rc,
 };
 
 use dioxus::{
-	core::{consume_context, provide_context, try_consume_context, use_hook_with_cleanup},
-	hooks::{use_context, use_effect, use_signal},
-	prelude::{ReadableRef, WritableRef},
-	signals::{ReadableExt, Signal, WritableExt},
+	core::{
+		ScopeId, Subscribers, consume_context, provide_context, try_consume_context,
+		use_hook_with_cleanup,
+	},
+	hooks::use_context,
+	prelude::{ReadableRef, WritableRef, WriteLock},
+	signals::{BorrowError, BorrowMutError, Readable, Signal, UnsyncStorage, Writable},
 };
 
-use crate::model::Reflect;
+use crate::model::Scoped;
 
 use super::{Value, ValueSource};
 
@@ -107,45 +109,38 @@ impl<'de> serde::Deserialize<'de> for ReactiveValue {
 	}
 }
 
-/// Read reference to the value of a [`ReactiveValue`].
+/// Write metadata for [`ReactiveValue`].
 ///
-/// Subscribes the calling scope to future changes, exactly like [`Signal::read`].
-/// Derefs to [`Value`]. The lifetime `'a` is tied to the originating
-/// [`ReactiveValue`] borrow.
-pub type ReactiveReadRef<'a> = ReadableRef<'a, Signal<Value>>;
-
-/// Write reference to the value of a [`ReactiveValue`].
+/// Stored as the `data` field of [`WriteLock`]. Because [`WriteLock`] drops
+/// `data` **before** `write` (reverse declaration order), this metadata can
+/// safely read the final value through a raw pointer while the write guard is
+/// still held, then fire the remote `on_write` notification.
 ///
-/// Provides mutable access to the underlying [`Value`]. On drop:
-/// 1. Fires the [`ValueContext`]'s `on_write` callback (remote notification).
-/// 2. The inner write guard drops, notifying Dioxus subscribers (local UI).
-///
-/// The lifetime `'a` is tied to the originating [`ReactiveValue`] borrow.
-pub struct ReactiveWriteRef<'a> {
-	guard: WritableRef<'static, Signal<Value>>,
+/// After `ReactiveWriteMetadata` drops, its `inner_meta` field
+/// ([`SignalSubscriberDrop`]) drops, notifying local Dioxus subscribers.
+/// Finally the write guard in `WriteLock.write` releases the borrow.
+pub struct ReactiveWriteMetadata {
+	/// Raw pointer to the locked value. Valid for the duration of this drop
+	/// because the write guard outlives this struct.
+	value_ptr: *const Value,
+	/// Dioxus subscriber-drop metadata from the underlying signal.
+	/// Held solely for its [`Drop`] side effect (notifies local subscribers);
+	/// never read directly.
+	#[allow(dead_code)]
+	inner_meta: <Signal<Value> as Writable>::WriteMetadata,
 	id: ReactiveValueId,
 	ctx: Rc<ValueContext>,
-	_phantom: PhantomData<&'a ReactiveValue>,
 }
 
-impl std::ops::Deref for ReactiveWriteRef<'_> {
-	type Target = Value;
-
-	fn deref(&self) -> &Value {
-		&self.guard
-	}
-}
-
-impl std::ops::DerefMut for ReactiveWriteRef<'_> {
-	fn deref_mut(&mut self) -> &mut Value {
-		&mut self.guard
-	}
-}
-
-impl Drop for ReactiveWriteRef<'_> {
+impl Drop for ReactiveWriteMetadata {
 	fn drop(&mut self) {
-		self.ctx.notify_write(self.id, &self.guard);
-		// `self.guard` drops after this body returns, notifying Dioxus subscribers.
+		// Safety: `WriteLock` drops `data` (us) before `write` (the write
+		// guard). The write guard is therefore still alive and holding the
+		// borrow, so `value_ptr` is valid and points to the current value.
+		let value = unsafe { &*self.value_ptr };
+		self.ctx.notify_write(self.id, value);
+		// `self.inner_meta` (SignalSubscriberDrop) drops after this block,
+		// notifying Dioxus subscribers.
 	}
 }
 
@@ -168,37 +163,6 @@ pub fn use_reactive_value(initial: impl FnOnce() -> Value) -> ReactiveValue {
 }
 
 impl ReactiveValue {
-	/// The inverse of [`use_adapter`](ReactiveValue::use_adapter).
-	///
-	/// Creates a [`ReactiveValue`] backed by an existing `Signal<T>` and
-	/// wires two effects:
-	/// - **`Signal<T>` → `ReactiveValue`**: local writes to the signal are
-	///   forwarded to the remote window via the `on_write` callback.
-	/// - **`ReactiveValue` → `Signal<T>`**: remote writes update the local
-	///   signal (equality-checked to break feedback loops).
-	///
-	/// Must be called from a Dioxus hook context.
-	pub fn use_from_signal<T: Reflect + Clone + PartialEq + 'static>(signal: Signal<T>) -> Self {
-		let rv = use_reactive_value(|| signal.peek().clone().to_value());
-
-		// Signal<T> → ReactiveValue: propagates local changes to the remote.
-		use_effect(move || {
-			*rv.write() = signal.read().clone().to_value();
-		});
-
-		// ReactiveValue → Signal<T>: applies remote changes to the local signal.
-		use_effect(move || {
-			if let Ok(t) = T::try_from_value((*rv.read()).clone()) {
-				if *signal.peek() != t {
-					let mut signal = signal;
-					signal.set(t);
-				}
-			}
-		});
-
-		rv
-	}
-
 	/// Create a new reactive value backed by `initial`.
 	///
 	/// The signal is allocated in the [`ValueContext`]'s scope and lives until
@@ -206,18 +170,6 @@ impl ReactiveValue {
 	/// use [`use_reactive_value`] instead.
 	pub fn new(initial: Value) -> Self {
 		consume_context::<Rc<ValueContext>>().create(initial)
-	}
-
-	/// Get a read reference to the current value.
-	///
-	/// Subscribes the calling scope to future changes. Panics if no
-	/// [`ValueContext`] is active or the signal has been freed.
-	pub fn read(&self) -> ReactiveReadRef<'_> {
-		let ctx = consume_context::<Rc<ValueContext>>();
-		let signal = ctx
-			.get_signal(self.id)
-			.expect("ReactiveValue::read: signal not found in ValueContext");
-		signal.read_unchecked()
 	}
 
 	/// Apply a value without notifying the remote window.
@@ -229,60 +181,61 @@ impl ReactiveValue {
 	pub fn write_silent(&self, value: Value) {
 		consume_context::<Rc<ValueContext>>().apply(self.id, value);
 	}
+}
 
-	/// Get a write reference to the current value.
-	///
-	/// The remote window is notified when this reference is dropped and the
-	/// value has changed. Panics if no [`ValueContext`] is active or the
-	/// signal has been freed.
-	pub fn write(&self) -> ReactiveWriteRef<'_> {
-		let ctx = consume_context::<Rc<ValueContext>>();
-		let signal = ctx
-			.get_signal(self.id)
-			.expect("ReactiveValue::write: signal not found in ValueContext");
-		let guard = signal.write_unchecked();
-		ReactiveWriteRef {
-			guard,
-			id: self.id,
-			ctx,
-			_phantom: PhantomData,
-		}
+/// Retrieve the underlying [`Signal<Value>`] for a [`ReactiveValue`], panicking
+/// if the context is missing or the signal has been freed.
+fn get_signal(rv: &ReactiveValue) -> Signal<Value> {
+	consume_context::<Rc<ValueContext>>()
+		.get_signal(rv.id)
+		.expect("ReactiveValue: signal not found in ValueContext")
+}
+
+impl Scoped for ReactiveValue {
+	fn scope(&self) -> ScopeId {
+		// The signal is created in the ValueContext's scope; its origin scope
+		// is therefore the context's own scope.
+		get_signal(self).origin_scope()
+	}
+}
+
+impl Readable for ReactiveValue {
+	type Target = Value;
+	type Storage = UnsyncStorage;
+
+	fn try_read_unchecked(&self) -> Result<ReadableRef<'static, Self>, BorrowError> {
+		get_signal(self).try_read_unchecked()
 	}
 
-	/// Returns a [`Signal<T>`] that stays in sync with this reactive value.
-	///
-	/// - Changes arriving from the remote flow through `try_into` into the
-	///   returned signal.
-	/// - Local writes to the returned signal are converted via `from` and
-	///   forwarded to the remote window through [`ValueContext`]'s `on_write`
-	///   callback (via [`ReactiveWriteRef`]'s [`Drop`] impl).
-	///
-	/// Feedback loops are prevented by the equality check inside
-	/// [`ReactiveWriteRef::drop`] and by only updating `adapted` when its
-	/// value would actually change.
-	pub fn use_adapter<T: Reflect + Clone + PartialEq + 'static>(&self) -> Signal<T> {
-		let initial = T::try_from_value((*self.read()).clone())
-			.ok()
-			.expect("initial adapter conversion must succeed");
-		let mut adapted = use_signal(move || initial);
+	fn try_peek_unchecked(&self) -> Result<ReadableRef<'static, Self>, BorrowError> {
+		get_signal(self).try_peek_unchecked()
+	}
 
-		let this = *self;
+	fn subscribers(&self) -> Subscribers {
+		get_signal(self).subscribers()
+	}
+}
 
-		// Underlying → adapted.
-		use_effect(move || {
-			let underlying = this.read(); // ReactiveReadRef, subscribes to signal changes
-			if let Ok(new_adapted) = T::try_from_value((*underlying).clone()) {
-				if *adapted.peek() != new_adapted {
-					adapted.set(new_adapted);
-				}
-			}
-		});
+impl Writable for ReactiveValue {
+	type WriteMetadata = ReactiveWriteMetadata;
 
-		// Adapted → underlying (with write notification via ReactiveWriteRef::drop).
-		use_effect(move || {
-			*this.write() = adapted.read().clone().to_value();
-		});
-
-		adapted
+	fn try_write_unchecked(&self) -> Result<WritableRef<'static, Self>, BorrowMutError>
+	where
+		Self::Target: 'static,
+	{
+		let ctx = consume_context::<Rc<ValueContext>>();
+		let write = get_signal(self).try_write_unchecked()?;
+		// Get a pointer to the value while the write guard is held.
+		let value_ptr: *const Value = &*write as *const Value;
+		let (inner_write, inner_meta) = write.into_parts();
+		Ok(WriteLock::new_with_metadata(
+			inner_write,
+			ReactiveWriteMetadata {
+				value_ptr,
+				inner_meta,
+				id: self.id,
+				ctx,
+			},
+		))
 	}
 }
