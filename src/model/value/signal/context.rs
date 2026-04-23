@@ -1,4 +1,8 @@
-use std::{cell::RefCell, collections::HashMap};
+use std::{
+	cell::RefCell,
+	collections::{HashMap, hash_map::Entry},
+	rc::Rc,
+};
 
 use dioxus::{core::current_scope_id, prelude::*};
 use slab::Slab;
@@ -22,7 +26,7 @@ pub(crate) struct ValueContext {
 	local: RefCell<Slab<SignalEntry>>,
 
 	/// Remotely-owned entries.
-	remote: RefCell<HashMap<ReactiveValueId, SignalEntry>>,
+	remote: RefCell<HashMap<usize, SignalEntry>>,
 
 	/// Called when this window writes a value locally (to propagate to remote).
 	on_write: Box<dyn Fn(ReactiveValueId, &Value)>,
@@ -32,12 +36,34 @@ impl ValueContext {
 	/// Create a new context. Must be called from a component/hook scope so
 	/// [`current_scope_id`] can capture the right owner for new signals.
 	pub fn new(side: ValueSource, on_write: impl 'static + Fn(ReactiveValueId, &Value)) -> Self {
+		debug!("[{side}] init value context");
+
 		Self {
 			side,
 			scope_id: current_scope_id(),
 			local: RefCell::new(Slab::new()),
 			remote: RefCell::new(HashMap::new()),
 			on_write: Box::new(on_write),
+		}
+	}
+
+	/// Create a new local signal.
+	pub fn create(self: &Rc<Self>, initial: Value) -> ReactiveValue {
+		let signal = self.new_signal(initial);
+		let id = self.local.borrow_mut().insert(SignalEntry {
+			signal,
+			local_refs: 1,
+		});
+
+		debug!("[{}] create {id}", self.side);
+
+		ReactiveValue {
+			id: ReactiveValueId {
+				owner: self.side,
+				id,
+			},
+			signal,
+			ctx: self.clone(),
 		}
 	}
 
@@ -50,40 +76,44 @@ impl ValueContext {
 	/// - **Locally-owned, unknown**: panics — local signals must be created via
 	///   [`create`]; receiving a reference to a non-existent local signal
 	///   indicates a bug.
-	pub fn apply(&self, id: ReactiveValueId, value: Value) {
+	pub fn set(&self, id: ReactiveValueId, value: Value) -> Signal<Value> {
+		debug!("[{}] set {id} = {value:?}", self.side);
+
 		if id.owner == self.side {
 			let mut signal = self
-				.get_signal(id)
-				.expect("apply: locally-owned signal not found — it may have been freed");
+				.get_local_signal(id.id)
+				.expect("locally-owned signal not found — it may have been freed");
+
 			if *signal.peek() != value {
 				signal.set(value);
 			}
+
+			signal
 		} else {
-			let existing = self.remote.borrow().get(&id).map(|e| e.signal);
-			match existing {
-				None => {
-					self.remote.borrow_mut().insert(
-						id,
-						SignalEntry {
-							signal: self.new_signal(value),
-							local_refs: 0,
-						},
-					);
+			let mut remote = self.remote.borrow_mut();
+
+			match remote.entry(id.id) {
+				Entry::Vacant(e) => {
+					let signal = self.new_signal(value);
+
+					e.insert(SignalEntry {
+						signal,
+						local_refs: 1,
+					});
+
+					signal
 				}
-				Some(mut signal) => {
+				Entry::Occupied(e) => {
+					let mut signal = e.into_mut().signal;
+
 					if *signal.peek() != value {
 						signal.set(value);
 					}
+
+					signal
 				}
 			}
 		}
-	}
-
-	/// Peek at the current value without subscribing.
-	///
-	/// Returns `None` if the signal is unknown.
-	pub fn current_value(&self, id: ReactiveValueId) -> Option<Value> {
-		self.get_signal(id).map(|s| (*s.peek()).clone())
 	}
 
 	/// Fire the `on_write` callback for `id` with the given `value`.
@@ -104,25 +134,18 @@ impl ValueContext {
 	/// Look up the signal for `id` in either the local or remote map.
 	pub fn get_signal(&self, id: ReactiveValueId) -> Option<Signal<Value>> {
 		if id.owner == self.side {
-			self.local.borrow().get(id.id).map(|e| e.signal)
+			self.get_local_signal(id.id)
 		} else {
-			self.remote.borrow().get(&id).map(|e| e.signal)
+			self.get_remote_signal(id.id)
 		}
 	}
 
-	/// Allocate a new locally-owned signal and return its [`ReactiveValue`] handle.
-	pub fn create(&self, initial: Value) -> ReactiveValue {
-		let id = self.local.borrow_mut().insert(SignalEntry {
-			signal: self.new_signal(initial),
-			local_refs: 0,
-		});
+	pub fn get_local_signal(&self, id: usize) -> Option<Signal<Value>> {
+		self.local.borrow().get(id).map(|e| e.signal)
+	}
 
-		ReactiveValue {
-			id: ReactiveValueId {
-				owner: self.side,
-				id,
-			},
-		}
+	pub fn get_remote_signal(&self, id: usize) -> Option<Signal<Value>> {
+		self.remote.borrow().get(&id).map(|e| e.signal)
 	}
 
 	pub fn inc_ref(&self, id: ReactiveValueId) {
@@ -130,7 +153,7 @@ impl ValueContext {
 			if let Some(e) = self.local.borrow_mut().get_mut(id.id) {
 				e.local_refs += 1;
 			}
-		} else if let Some(e) = self.remote.borrow_mut().get_mut(&id) {
+		} else if let Some(e) = self.remote.borrow_mut().get_mut(&id.id) {
 			e.local_refs += 1;
 		}
 	}
@@ -153,7 +176,7 @@ impl ValueContext {
 		} else {
 			let remove = {
 				let mut remote = self.remote.borrow_mut();
-				match remote.get_mut(&id) {
+				match remote.get_mut(&id.id) {
 					None => return,
 					Some(e) => {
 						e.local_refs = e.local_refs.saturating_sub(1);
@@ -162,7 +185,7 @@ impl ValueContext {
 				}
 			};
 			if remove {
-				self.remote.borrow_mut().remove(&id);
+				self.remote.borrow_mut().remove(&id.id);
 			}
 		}
 	}

@@ -2,13 +2,12 @@ use std::rc::Rc;
 
 use dioxus::prelude::*;
 
-use super::ui::input::{
-	BoolInput, EnumInput, IntInput, StringInput,
-	adapter::{use_bool_signal, use_enum_signal, use_int_signal, use_string_signal},
-};
+use super::ui::input::{BoolInput, EnumInput, IntInput, StringInput};
 use crate::{
 	app::protocol::{set_child_value, use_parent},
-	model::{ComponentEntry, EnumType, IntType, Property, ReactiveValue, Type, Value},
+	model::{
+		AnyValueSignal, ComponentEntry, EnumType, IntType, Property, ReactiveValue, Type, Value,
+	},
 };
 
 use super::{Route, protocol::CHILD_ID};
@@ -289,7 +288,7 @@ fn PropertyEditor(prop: &'static Property, state: PropertyState) -> Element {
 #[component]
 fn ValueEditor<V>(ty: &'static Type, value: V) -> Element
 where
-	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+	V: PartialEq + AnyValueSignal,
 {
 	match ty {
 		Type::Bool => rsx! { BoolPropertyEditor { value } },
@@ -297,45 +296,43 @@ where
 		Type::Int(int_type) => rsx! { IntPropertyEditor { int_type: *int_type, value } },
 		Type::Enum(enum_type) => rsx! { EnumPropertyEditor { enum_type: *enum_type, value } },
 		Type::Option(inner) => rsx! { OptionPropertyEditor { inner, value } },
-		Type::Signal(inner) => rsx! { SignalPropertyEditor { inner, value } },
+		Type::Signal(inner_ty) => rsx! { SignalPropertyEditor { inner_ty, value } },
 	}
 }
-
-// ── Per-type property editors (adapter → typed input) ─────────────────────────
 
 #[component]
 fn BoolPropertyEditor<V>(value: V) -> Element
 where
-	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+	V: PartialEq + AnyValueSignal,
 {
-	let value = use_bool_signal(value);
+	let value = use_hook(|| value.couple_into_signal().unwrap());
 	rsx! { BoolInput { value } }
 }
 
 #[component]
 fn StringPropertyEditor<V>(value: V) -> Element
 where
-	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+	V: PartialEq + AnyValueSignal,
 {
-	let value = use_string_signal(value);
+	let value = use_hook(|| value.couple_into_signal().unwrap());
 	rsx! { StringInput { value } }
 }
 
 #[component]
 fn IntPropertyEditor<V>(int_type: IntType, value: V) -> Element
 where
-	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+	V: PartialEq + AnyValueSignal,
 {
-	let value = use_int_signal(int_type, value);
+	let value = use_hook(|| value.couple_into_signal().unwrap());
 	rsx! { IntInput { value } }
 }
 
 #[component]
 fn EnumPropertyEditor<V>(enum_type: EnumType, value: V) -> Element
 where
-	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+	V: PartialEq + AnyValueSignal,
 {
-	let value = use_enum_signal(value);
+	let value = use_hook(|| value.couple_into_signal().unwrap());
 	rsx! { EnumInput { variants: enum_type.variants, value } }
 }
 
@@ -344,7 +341,7 @@ where
 #[component]
 fn OptionPropertyEditor<V>(inner: &'static Type, mut value: V) -> Element
 where
-	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+	V: 'static + Clone + PartialEq + Writable<Target = Value>,
 {
 	let mut is_some = use_signal(|| matches!(*value.peek(), Value::Option(Some(_))));
 
@@ -382,30 +379,14 @@ where
 /// the property's [`Value::Signal`] to a plain [`Signal<Value>`] that the
 /// inner editor can read and write.
 #[component]
-fn SignalPropertyEditor<V>(inner: &'static Type, value: V) -> Element
+fn SignalPropertyEditor<V>(inner_ty: &'static Type, value: V) -> Element
 where
-	V: 'static + Copy + PartialEq + Writable<Target = Value>,
+	V: 'static + Clone + PartialEq + Writable<Target = Value>,
 {
 	let inner_value: ReactiveValue = match value.peek().clone() {
-		Value::Signal(inner_value) => inner_value,
+		Value::Signal(rv) => rv,
 		_ => panic!("SignalPropertyEditor: expected Value::Signal"),
 	};
-
-	// // Inner Signal<Value> that proxies the ReactiveValue.
-	// let mut inner_value = use_signal(|| (*rv.read()).clone());
-
-	// // ReactiveValue → inner_value: re-runs whenever the remote updates the signal.
-	// use_effect(move || {
-	// 	let new_val = (*rv.read()).clone();
-	// 	if *inner_value.peek() != new_val {
-	// 		inner_value.set(new_val);
-	// 	}
-	// });
-
-	// // inner_value → ReactiveValue: local edits propagate to the remote.
-	// use_effect(move || {
-	// 	*rv.write() = inner_value();
-	// });
 
 	rsx! {
 		div {
@@ -415,7 +396,7 @@ where
 				title: "Reactive signal — changes are shared with the preview",
 				"⚡"
 			}
-			ValueEditor { ty: inner, value: inner_value }
+			ValueEditor { ty: inner_ty, value: inner_value }
 		}
 	}
 }

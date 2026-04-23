@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use dioxus::{
-	core::use_hook_with_cleanup,
+	core::{Runtime, consume_context, current_scope_id, use_hook_with_cleanup},
 	hooks::use_signal,
 	signals::{Signal, WritableExt},
 };
@@ -10,7 +10,7 @@ use wasm_bindgen::{JsCast, JsValue, prelude::Closure};
 use web_sys::{HtmlIFrameElement, MessageEvent, Window};
 
 use crate::model::{
-	ReactiveValue, ReactiveValueId, Value, ValueSource, provide_signal_value_context,
+	ReactiveValueId, Value, ValueContext, ValueSource, use_signal_value_context_provider,
 };
 
 #[derive(Serialize, Deserialize)]
@@ -37,7 +37,7 @@ enum ChildMessage {
 }
 
 pub fn use_child(initial_values: impl FnOnce() -> Vec<Value>) -> Signal<Vec<Value>> {
-	provide_signal_value_context(ValueSource::Child, |id, value| {
+	use_signal_value_context_provider(ValueSource::Child, |id, value| {
 		if let Some(parent) = parent_window() {
 			post_message(
 				&parent,
@@ -60,7 +60,7 @@ pub fn use_child(initial_values: impl FnOnce() -> Vec<Value>) -> Signal<Vec<Valu
 				}
 			}
 			ParentMessage::WriteSignal { id, value } => {
-				ReactiveValue { id }.write_silent(value);
+				consume_context::<Rc<ValueContext>>().set(id, value);
 			}
 		}
 	});
@@ -69,7 +69,7 @@ pub fn use_child(initial_values: impl FnOnce() -> Vec<Value>) -> Signal<Vec<Valu
 }
 
 pub fn use_parent() -> Signal<bool> {
-	provide_signal_value_context(ValueSource::Parent, |id, value| {
+	use_signal_value_context_provider(ValueSource::Parent, |id, value| {
 		if let Some(child) = child_window() {
 			post_message(
 				&child,
@@ -90,7 +90,7 @@ pub fn use_parent() -> Signal<bool> {
 				// TODO: propagate child-initiated property value updates to the parent
 			}
 			ChildMessage::WriteSignal { id, value } => {
-				ReactiveValue { id }.write_silent(value);
+				consume_context::<Rc<ValueContext>>().set(id, value);
 			}
 		}
 	});
@@ -102,14 +102,19 @@ fn use_message<T>(mut f: impl 'static + FnMut(T))
 where
 	T: DeserializeOwned,
 {
+	let scope = current_scope_id();
+
 	use_hook_with_cleanup(
 		move || {
 			let closure = Closure::<dyn FnMut(MessageEvent)>::new(move |e: MessageEvent| {
-				if let Some(json) = e.data().as_string()
-					&& let Ok(t) = serde_json::from_str::<T>(&json)
-				{
-					f(t)
-				}
+				let rt = Runtime::current();
+				rt.in_scope(scope, || {
+					if let Some(json) = e.data().as_string()
+						&& let Ok(t) = serde_json::from_str::<T>(&json)
+					{
+						f(t)
+					}
+				})
 			});
 
 			if let Some(w) = web_sys::window() {

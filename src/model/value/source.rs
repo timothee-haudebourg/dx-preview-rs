@@ -1,3 +1,5 @@
+use core::fmt;
+
 use super::Value;
 
 #[derive(
@@ -9,12 +11,25 @@ pub enum ValueSource {
 }
 
 impl ValueSource {
+	pub fn name(&self) -> &'static str {
+		match self {
+			Self::Child => "child",
+			Self::Parent => "parent",
+		}
+	}
+
 	pub fn is_child(&self) -> bool {
 		matches!(self, Self::Child)
 	}
 
 	pub fn is_parent(&self) -> bool {
 		matches!(self, Self::Parent)
+	}
+}
+
+impl fmt::Display for ValueSource {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		self.name().fmt(f)
 	}
 }
 

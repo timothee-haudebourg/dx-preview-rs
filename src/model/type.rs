@@ -1,7 +1,8 @@
-use dioxus::{logger::tracing::trace, prelude::ReadableExt, signals::Signal};
+use dioxus::signals::Signal;
+
+use crate::model::AnyValueSignal;
 
 use super::{IntValue, ReactiveValue, Value};
-use crate::model::couple_signals;
 
 #[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Type {
@@ -141,38 +142,12 @@ where
 	const TYPE: Type = Type::Signal(&T::TYPE);
 
 	fn to_value(self) -> Value {
-		trace!("Signal::to_value: creating ReactiveValue");
-		let rv = ReactiveValue::new((*self.peek()).clone().to_value());
-		trace!("Signal::to_value: ReactiveValue created, coupling signals");
-		couple_signals(
-			self,
-			rv,
-			|t: &T| Some(t.clone().to_value()),
-			|v: &Value| T::try_from_value(v.clone()).ok(),
-		);
-		trace!("Signal::to_value: done");
-		Value::Signal(rv)
+		Value::Signal(ReactiveValue::couple_from_signal(self))
 	}
 
 	fn try_from_value(value: Value) -> Result<Self, TypeError> {
 		match value {
-			Value::Signal(rv) => {
-				trace!("Signal::try_from_value: peeking ReactiveValue");
-				let t = T::try_from_value((*rv.peek()).clone())?;
-				trace!("Signal::try_from_value: getting current_scope_id");
-				let scope = dioxus::core::current_scope_id();
-				trace!("Signal::try_from_value: creating Signal::new_in_scope");
-				let signal = Signal::new_in_scope(t, scope);
-				trace!("Signal::try_from_value: coupling signals");
-				couple_signals(
-					signal,
-					rv,
-					|t: &T| Some(t.clone().to_value()),
-					|v: &Value| T::try_from_value(v.clone()).ok(),
-				);
-				trace!("Signal::try_from_value: done");
-				Ok(signal)
-			}
+			Value::Signal(rv) => rv.couple_into_signal(),
 			_ => Err(TypeError::InvalidType),
 		}
 	}
