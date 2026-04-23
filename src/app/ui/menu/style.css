@@ -1,0 +1,56 @@
+/* ── Menu ─────────────────────────────────────────────────────────────────── */
+
+.menu {
+	width: 240px;
+	min-width: 240px;
+	border-right: 1px solid var(--ui-color-border);
+	overflow-y: auto;
+	background: var(--ui-color-surface);
+	display: flex;
+	flex-direction: column;
+}
+
+.menu header {
+	padding: 16px 20px;
+	font-weight: 700;
+	font-size: 15px;
+	letter-spacing: -0.3px;
+	border-bottom: 1px solid var(--ui-color-border);
+	flex-shrink: 0;
+	color: var(--ui-color-text);
+	user-select: none;
+}
+
+.menu > div {
+	padding: 6px 0;
+	flex: 1;
+}
+
+/* ── Menu item ────────────────────────────────────────────────────────────── */
+
+.menu-item {
+	padding: 7px 14px;
+	margin: 2px 6px;
+	border-radius: var(--ui-radius);
+	cursor: pointer;
+	user-select: none;
+	font-size: var(--ui-font-size);
+	color: var(--ui-color-text-muted);
+	transition:
+		background 120ms ease,
+		color 120ms ease;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.menu-item:hover:not(.selected) {
+	background: var(--ui-color-hover);
+	color: var(--ui-color-text);
+}
+
+.menu-item.selected {
+	background: var(--ui-color-primary);
+	color: var(--ui-color-primary-fg);
+	font-weight: 500;
+}

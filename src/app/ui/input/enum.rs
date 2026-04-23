@@ -3,10 +3,12 @@ use dx_preview_macro::preview;
 
 use crate::model::EnumVariant;
 
+const STYLE: Asset = asset!("./style.css");
+
 #[preview(crate = crate)]
 /// A `<select>` dropdown for choosing among a fixed set of named enum variants.
 ///
-/// `signal` holds the index (0-based) of the currently selected variant and is
+/// `value` holds the index (0-based) of the currently selected variant and is
 /// updated in place whenever the user picks a different option.
 #[component]
 pub fn EnumInput(
@@ -19,8 +21,10 @@ pub fn EnumInput(
 	value: Signal<u8>,
 ) -> Element {
 	rsx! {
+		document::Link { rel: "stylesheet", href: STYLE }
+
 		select {
-			style: "width:100%;box-sizing:border-box;border:1px solid #d1d5db;border-radius:4px;padding:5px 8px;font-size:13px;outline:none;background:#fff;cursor:pointer;",
+			class: "input-select",
 			onchange: move |e| {
 				if let Ok(i) = e.value().parse::<u8>() {
 					value.set(i);

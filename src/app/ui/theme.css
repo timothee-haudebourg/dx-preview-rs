@@ -1,0 +1,76 @@
+/* ── Design tokens ────────────────────────────────────────────────────────────
+   All UI components reference these variables.  Override them on :root (or a
+   scoping selector) to customise the look of the entire storybook shell.
+   ─────────────────────────────────────────────────────────────────────────── */
+
+:root {
+	/* Typography */
+	--ui-font:
+		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
+		Arial, sans-serif;
+	--ui-font-mono:
+		ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas,
+		"Liberation Mono", monospace;
+	--ui-font-size: 14px;
+	--ui-font-size-sm: 13px;
+	--ui-font-size-xs: 12px;
+	--ui-font-size-lg: 15px;
+
+	/* Brand / primary */
+	--ui-color-primary: #2563eb;
+	--ui-color-primary-hover: #1d4ed8;
+	--ui-color-primary-active: #1e40af;
+	--ui-color-primary-subtle: rgb(37 99 235 / 0.1);
+	--ui-color-primary-fg: #ffffff;
+
+	/* Neutral surfaces */
+	--ui-color-bg: #ffffff;
+	--ui-color-surface: #f8fafc;
+	--ui-color-surface-raised: #f1f5f9;
+	--ui-color-hover: #f1f5f9;
+	--ui-color-active: #e2e8f0;
+
+	/* Borders */
+	--ui-color-border: #e2e8f0;
+	--ui-color-border-strong: #cbd5e1;
+
+	/* Text */
+	--ui-color-text: #1e293b;
+	--ui-color-text-muted: #64748b;
+	--ui-color-text-subtle: #94a3b8;
+	--ui-color-text-disabled: #cbd5e1;
+	--ui-color-text-on-primary: #ffffff;
+
+	/* Semantic */
+	--ui-color-success: #16a34a;
+	--ui-color-warning: #d97706;
+	--ui-color-danger: #dc2626;
+
+	/* Shape */
+	--ui-radius-sm: 4px;
+	--ui-radius: 6px;
+	--ui-radius-md: 8px;
+	--ui-radius-lg: 12px;
+
+	/* Spacing scale (multiples of 4 px) */
+	--ui-space-1: 4px;
+	--ui-space-2: 8px;
+	--ui-space-3: 12px;
+	--ui-space-4: 16px;
+	--ui-space-5: 20px;
+	--ui-space-6: 24px;
+
+	/* Shadows */
+	--ui-shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+	--ui-shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+	--ui-shadow-md:
+		0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+
+	/* Transitions */
+	--ui-transition-fast: 100ms ease;
+	--ui-transition: 150ms ease;
+	--ui-transition-slow: 250ms ease;
+
+	/* Focus ring */
+	--ui-focus-ring: 0 0 0 3px var(--ui-color-primary-subtle);
+}

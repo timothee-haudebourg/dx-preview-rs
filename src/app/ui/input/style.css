@@ -1,0 +1,66 @@
+/* ── Input controls ──────────────────────────────────────────────────────────── */
+
+.input-text,
+.input-number,
+.input-select {
+	width: 100%;
+	box-sizing: border-box;
+	border: 1.5px solid var(--ui-color-border);
+	border-radius: var(--ui-radius-sm);
+	padding: 5px 8px;
+	font-size: 13px;
+	font-family: var(--ui-font);
+	outline: none;
+	background: var(--ui-color-bg);
+	color: var(--ui-color-text);
+	transition:
+		border-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.input-text:focus,
+.input-number:focus {
+	border-color: var(--ui-color-primary);
+	box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
+}
+
+/* ── Select ──────────────────────────────────────────────────────────────────── */
+
+.input-select {
+	cursor: pointer;
+	appearance: none;
+	-webkit-appearance: none;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 8px center;
+	padding-right: 28px;
+}
+
+.input-select:focus {
+	border-color: var(--ui-color-primary);
+	box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
+}
+
+/* ── Bool (checkbox + label) ─────────────────────────────────────────────────── */
+
+.input-bool {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	cursor: pointer;
+	user-select: none;
+}
+
+.input-bool input {
+	width: 16px;
+	height: 16px;
+	cursor: pointer;
+	accent-color: var(--ui-color-primary);
+	flex-shrink: 0;
+}
+
+.input-bool span {
+	font-size: 13px;
+	color: var(--ui-color-text);
+	font-weight: 500;
+}

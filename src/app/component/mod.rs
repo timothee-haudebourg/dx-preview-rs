@@ -7,7 +7,7 @@ use crate::{
 
 use super::config;
 
-const STYLE: Asset = asset!("assets/component.css");
+const STYLE: Asset = asset!("src/app/component/style.css");
 
 /// Rendered inside the iframe — just the component plus any configured CSS,
 /// no storybook chrome.

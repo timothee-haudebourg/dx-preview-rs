@@ -2,5 +2,5 @@ extern crate dx_preview;
 
 fn main() {
 	dioxus::logger::init(dioxus::logger::tracing::Level::DEBUG).expect("failed to init logger");
-	dx_preview::launch(dx_preview::Config::default());
+	dx_preview::launch(dx_preview::Config::default().with_css(dx_preview::app::ui::THEME));
 }
