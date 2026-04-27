@@ -57,11 +57,11 @@ dedicated class to the element.
 ```css
 /* ✓ — the header element is unambiguous inside .menu */
 .menu header { … }
-.properties-panel > div { … }
+.panel > div { … }
 
 /* ✗ — the class carries no information the element type doesn't already give */
 .menu__header { … }
-.properties-panel__list { … }
+.panel__list { … }
 ```
 
 Reserve explicit classes for elements that cannot be distinguished by type or

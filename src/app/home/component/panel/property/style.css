@@ -1,9 +1,12 @@
 .dxp-property-editor {
-	padding: 8px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 0.5rem;
+	padding: 0.5rem 1rem;
 }
 
 .dxp-property-editor label {
-	font-size: 12px;
+	font-size: 0.85rem;
 	font-weight: 500;
 	line-height: 1.4;
 	transition: color 120ms ease;
@@ -12,12 +15,12 @@
 .dxp-option-editor {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 0.5rem;
 }
 
 .dxp-option-editor > input[type="checkbox"] {
-	width: 14px;
-	height: 14px;
+	width: 0.875rem;
+	height: 0.875rem;
 	cursor: pointer;
 	accent-color: var(--ui-color-accent);
 	flex-shrink: 0;
@@ -26,11 +29,11 @@
 .dxp-signal-editor {
 	display: flex;
 	align-items: center;
-	gap: 6px;
+	gap: 0.375rem;
 }
 
 .dxp-signal-editor span {
-	font-size: 11px;
+	font-size: 0.75em;
 	color: var(--ui-color-text-muted);
 	flex-shrink: 0;
 	line-height: 1;

@@ -48,3 +48,7 @@
 	/* Focus ring */
 	--ui-focus-ring: 0 0 0 3px rgb(37 99 235 / 0.12);
 }
+
+* {
+	box-sizing: border-box;
+}
