@@ -51,18 +51,54 @@ struct PreviewArgs {
 	/// Override for the `dx_preview` crate path, e.g. `crate` when the macro
 	/// is used inside `dx-preview` itself.
 	krate: Option<syn::Path>,
+	/// Optional layout component to wrap the previewed component in.
+	///
+	/// The layout must accept a `children: Element` prop. The previewed
+	/// component is rendered as the layout's child, e.g.:
+	///
+	/// ```rust,ignore
+	/// #[preview(layout = MyLayout)]
+	/// #[component]
+	/// pub fn MyComponent(...) -> Element { ... }
+	/// ```
+	///
+	/// generates a render function equivalent to:
+	///
+	/// ```rust,ignore
+	/// rsx! { MyLayout { MyComponent { ...props } } }
+	/// ```
+	layout: Option<syn::Path>,
 }
 
 impl syn::parse::Parse for PreviewArgs {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
-		if input.is_empty() {
-			return Ok(Self { krate: None });
+		let mut krate = None;
+		let mut layout = None;
+
+		while !input.is_empty() {
+			if input.peek(Token![crate]) {
+				let _: Token![crate] = input.parse()?;
+				let _: Token![=] = input.parse()?;
+				krate = Some(input.parse()?);
+			} else {
+				let key: syn::Ident = input.parse()?;
+				let _: Token![=] = input.parse()?;
+				if key == "layout" {
+					layout = Some(input.parse()?);
+				} else {
+					return Err(syn::Error::new(
+						key.span(),
+						"unknown key: expected `crate` or `layout`",
+					));
+				}
+			}
+
+			if input.peek(Token![,]) {
+				let _: Token![,] = input.parse()?;
+			}
 		}
-		// Accept `crate = <path>`.  The key is the `crate` keyword.
-		let _: Token![crate] = input.parse()?;
-		let _: Token![=] = input.parse()?;
-		let path: syn::Path = input.parse()?;
-		Ok(Self { krate: Some(path) })
+
+		Ok(Self { krate, layout })
 	}
 }
 
@@ -272,9 +308,8 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
-	let preview_args = parse_macro_input!(args as PreviewArgs);
-	let krate = preview_args
-		.krate
+	let PreviewArgs { krate, layout } = parse_macro_input!(args as PreviewArgs);
+	let krate = krate
 		.map(|p| quote! { #p })
 		.unwrap_or_else(|| quote! { ::dx_preview });
 	// Convenience alias for the model module path used throughout.
@@ -393,6 +428,27 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 		})
 		.collect();
 
+	// ── Render body ───────────────────────────────────────────────────────────
+
+	let render_body = match &layout {
+		Some(layout_path) => quote! {
+			rsx! {
+				#layout_path {
+					#component_ident {
+						#(#prop_assignments)*
+					}
+				}
+			}
+		},
+		None => quote! {
+			rsx! {
+				#component_ident {
+					#(#prop_assignments)*
+				}
+			}
+		},
+	};
+
 	// ── Output ────────────────────────────────────────────────────────────────
 
 	quote! {
@@ -420,11 +476,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 			use ::dioxus::prelude::*;
 			let mut __values = values.into_iter();
 			#(#prop_extractions)*
-			rsx! {
-				#component_ident {
-					#(#prop_assignments)*
-				}
-			}
+			#render_body
 		}
 
 		#[cfg(feature = "preview")]
