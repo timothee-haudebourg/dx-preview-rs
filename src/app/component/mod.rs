@@ -1,8 +1,10 @@
+use std::hash::{DefaultHasher, Hash, Hasher};
+
 use dioxus::prelude::*;
 
 use crate::{
 	app::protocol::{notify_child_ready, use_child},
-	model::ComponentEntry,
+	model::{ComponentEntry, Value},
 };
 
 use super::config;
@@ -40,9 +42,21 @@ fn ComponentBody(name: String, props: String) -> Element {
 	// shown. Runs once after the first render (use_hook is not reactive).
 	use_hook(notify_child_ready);
 
+	let values = values();
+	let key = {
+		let mut h = DefaultHasher::new();
+		values.hash(&mut h);
+		h.finish()
+	};
+
 	for entry in inventory::iter::<ComponentEntry> {
 		if entry.name == name {
-			return (entry.render)(values());
+			return rsx! {
+				Remount {
+					key_hash: key,
+					{(entry.render)(values)}
+				}
+			};
 		}
 	}
 
@@ -52,4 +66,22 @@ fn ComponentBody(name: String, props: String) -> Element {
 			"Component \"{name}\" not found."
 		}
 	}
+}
+
+/// Forces a full remount of its contents whenever `key_hash` changes.
+#[component]
+fn Remount(key_hash: u64, children: Element) -> Element {
+	rsx! {
+		for children in [children] {
+			Remounted {
+				key: "{key_hash}",
+				{children}
+			}
+		}
+	}
+}
+
+#[component]
+fn Remounted(children: Element) -> Element {
+	children
 }

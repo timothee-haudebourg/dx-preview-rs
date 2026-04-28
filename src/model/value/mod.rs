@@ -11,7 +11,7 @@ pub mod source;
 pub use signal::*;
 pub use source::*;
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 pub enum Value {
 	Bool(bool),
 	Int(IntValue),
@@ -44,7 +44,7 @@ impl Reflect for EnumValue {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Hash, Serialize, Deserialize)]
 pub enum IntValue {
 	U8(u8),
 	U16(u16),
