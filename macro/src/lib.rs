@@ -45,26 +45,6 @@ use syn::{
 	parse_macro_input,
 };
 
-// ── Option<T> helper ──────────────────────────────────────────────────────────
-
-/// If `ty` is `Option<T>`, returns the inner type `T`; otherwise returns `None`.
-fn extract_option_inner(ty: &syn::Type) -> Option<syn::Type> {
-	let syn::Type::Path(type_path) = ty else {
-		return None;
-	};
-	let seg = type_path.path.segments.last()?;
-	if seg.ident != "Option" {
-		return None;
-	}
-	let syn::PathArguments::AngleBracketed(args) = &seg.arguments else {
-		return None;
-	};
-	let syn::GenericArgument::Type(inner) = args.args.first()? else {
-		return None;
-	};
-	Some(inner.clone())
-}
-
 // ── Macro attribute args ──────────────────────────────────────────────────────
 
 struct PreviewArgs {
@@ -141,8 +121,6 @@ fn take_preview_attrs(attrs: &mut Vec<syn::Attribute>) -> DemoAttrs {
 struct ParamInfo {
 	name: Ident,
 	ty: syn::Type,
-	/// When `ty` is `Option<T>`, holds the inner type `T`; otherwise `None`.
-	inner_ty: Option<syn::Type>,
 	/// Exclude from `properties` / `default_values`; use default in render.
 	hidden: bool,
 	/// Explicit default expression (used both in UI defaults and render fallback).
@@ -321,11 +299,9 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 			};
 			let ty = (*pat_type.ty).clone();
 			let demo = take_preview_attrs(&mut pat_type.attrs);
-			let inner_ty = extract_option_inner(&ty);
 			params.push(ParamInfo {
 				name,
 				ty,
-				inner_ty,
 				hidden: demo.hidden,
 				default_expr: demo.default_expr,
 			});
@@ -364,41 +340,20 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 				Span::call_site(),
 			);
 
-			if let Some(inner) = &p.inner_ty {
-				// Optional property: wrap default in Value::Option
-				default_fns.push(quote! {
-					#[cfg(feature = "preview")]
-					#[doc(hidden)]
-					#[allow(non_snake_case)]
-					fn #default_fn_name() -> #model::Value {
-						#model::Value::Option((#default).as_ref().map(|__t| {
-							::std::boxed::Box::new(<#inner as #model::Reflect>::to_value(__t.clone()))
-						}))
-					}
-				});
-			} else {
-				// Required property: call Reflect::to_value directly
-				default_fns.push(quote! {
-					#[cfg(feature = "preview")]
-					#[doc(hidden)]
-					#[allow(non_snake_case)]
-					fn #default_fn_name() -> #model::Value {
-						<#ty as #model::Reflect>::to_value(#default)
-					}
-				});
-			}
-
-			let (reflect_ty, required) = if let Some(inner) = &p.inner_ty {
-				(quote! { #inner }, quote! { false })
-			} else {
-				(quote! { #ty }, quote! { true })
-			};
+			default_fns.push(quote! {
+				#[cfg(feature = "preview")]
+				#[doc(hidden)]
+				#[allow(non_snake_case)]
+				fn #default_fn_name() -> #model::Value {
+					<#ty as #model::Reflect>::to_value(#default)
+				}
+			});
 
 			quote! {
 				#model::Property {
 					name: #name_str,
-					r#type: <#reflect_ty as #model::Reflect>::TYPE,
-					required: #required,
+					r#type: <#ty as #model::Reflect>::TYPE,
+					required: true,
 					default_value: #default_fn_name,
 				}
 			}
