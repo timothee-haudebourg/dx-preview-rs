@@ -1,7 +1,7 @@
 use dioxus::prelude::*;
 use dx_preview_macro::preview;
 
-use crate::model::EnumVariant;
+use crate::model::{EnumValue, EnumVariant};
 
 const STYLE: Asset = asset!("./style.css");
 
@@ -18,7 +18,7 @@ pub fn EnumInput(
 	variants: &'static [EnumVariant],
 	/// Reactive index of the currently selected variant.
 	#[preview(hide)]
-	value: Signal<u8>,
+	value: Signal<EnumValue>,
 ) -> Element {
 	rsx! {
 		document::Link { rel: "stylesheet", href: STYLE }
@@ -27,13 +27,13 @@ pub fn EnumInput(
 			class: "input-select",
 			onchange: move |e| {
 				if let Ok(i) = e.value().parse::<u8>() {
-					value.set(i);
+					value.set(EnumValue(i));
 				}
 			},
 			for (i, variant) in variants.iter().enumerate() {
 				option {
 					value: "{i}",
-					selected: value() as usize == i,
+					selected: value().0 as usize == i,
 					"{variant.name}"
 				}
 			}

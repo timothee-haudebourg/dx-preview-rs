@@ -1,3 +1,8 @@
+use serde::{Deserialize, Serialize};
+use std::fmt;
+
+use crate::model::{EnumType, Reflect, Type, TypeError};
+
 use super::IntType;
 
 pub mod signal;
@@ -6,7 +11,7 @@ pub mod source;
 pub use signal::*;
 pub use source::*;
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Value {
 	Bool(bool),
 	Int(IntValue),
@@ -18,7 +23,28 @@ pub enum Value {
 	Signal(ReactiveValue),
 }
 
-#[derive(Debug, Clone, PartialEq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Default, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct EnumValue(pub u8);
+
+impl Reflect for EnumValue {
+	const TYPE: Type = Type::Enum(EnumType {
+		name: "EnumValue",
+		variants: &[],
+	});
+
+	fn to_value(self) -> Value {
+		Value::Enum(self.0)
+	}
+
+	fn try_from_value(value: Value) -> Result<Self, TypeError> {
+		match value {
+			Value::Enum(n) => Ok(Self(n)),
+			_ => Err(TypeError::InvalidType),
+		}
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum IntValue {
 	U8(u8),
 	U16(u16),
@@ -56,6 +82,36 @@ impl IntValue {
 			IntType::I16 => IntValue::I16(n as i16),
 			IntType::I32 => IntValue::I32(n as i32),
 			IntType::I64 => IntValue::I64(n as i64),
+		}
+	}
+}
+
+impl fmt::Display for IntValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			IntValue::U8(n) => n.fmt(f),
+			IntValue::U16(n) => n.fmt(f),
+			IntValue::U32(n) => n.fmt(f),
+			IntValue::U64(n) => n.fmt(f),
+			IntValue::I8(n) => n.fmt(f),
+			IntValue::I16(n) => n.fmt(f),
+			IntValue::I32(n) => n.fmt(f),
+			IntValue::I64(n) => n.fmt(f),
+		}
+	}
+}
+
+impl fmt::Display for Value {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		use dioxus::signals::ReadableExt;
+		match self {
+			Value::Bool(b) => b.fmt(f),
+			Value::Int(i) => i.fmt(f),
+			Value::String(s) => s.fmt(f),
+			Value::Enum(n) => n.fmt(f),
+			Value::Option(None) => write!(f, "None"),
+			Value::Option(Some(v)) => write!(f, "Some({v})"),
+			Value::Signal(rv) => write!(f, "Signal({})", &*rv.peek()),
 		}
 	}
 }
