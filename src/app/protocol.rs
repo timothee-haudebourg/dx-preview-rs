@@ -28,7 +28,6 @@ enum ParentMessage {
 #[serde(tag = "type", content = "data")]
 enum ChildMessage {
 	Ready,
-	Set(usize, Value),
 	/// Child wrote a new value to a reactive signal.
 	WriteSignal {
 		id: ReactiveValueId,
@@ -86,9 +85,6 @@ pub fn use_parent() -> Signal<bool> {
 	use_message({
 		move |message| match message {
 			ChildMessage::Ready => ready.set(true),
-			ChildMessage::Set(_, _) => {
-				// TODO: propagate child-initiated property value updates to the parent
-			}
 			ChildMessage::WriteSignal { id, value } => {
 				consume_context::<Rc<ValueContext>>().set(id, value);
 			}
@@ -176,10 +172,4 @@ pub fn set_child_value(i: usize, value: Value) {
 	let Some(child) = child_window() else { return };
 
 	post_message(&child, ParentMessage::Set(i, value));
-}
-
-pub fn set_parent_value(i: usize, value: Value) {
-	let Some(child) = parent_window() else { return };
-
-	post_message(&child, ChildMessage::Set(i, value));
 }
