@@ -7,7 +7,7 @@ use panel::*;
 use crate::{
 	app::{
 		Route,
-		protocol::{CHILD_ID, use_parent},
+		protocol::{CHILD_ID, set_child_value, use_parent},
 	},
 	model::ComponentEntry,
 };
@@ -19,10 +19,19 @@ pub fn ComponentView(entry: &'static ComponentEntry) -> Element {
 	let values = entry
 		.properties
 		.iter()
-		.map(|prop| use_signal(|| (prop.default_value)()))
+		.enumerate()
+		.map(|(i, prop)| {
+			let value = use_signal(|| (prop.default_value)());
+
+			use_effect(move || {
+				set_child_value(i, value());
+			});
+
+			value
+		})
 		.collect::<Vec<_>>();
 
-	let src = use_memo({
+	let src = use_hook({
 		let values = values.clone();
 		move || {
 			let values: Vec<_> = values.iter().map(|v| v()).collect();
@@ -42,7 +51,7 @@ pub fn ComponentView(entry: &'static ComponentEntry) -> Element {
 
 			iframe {
 				id: CHILD_ID,
-				src: "{src()}",
+				src: "{src}",
 				class: if iframe_ready() { "ready" } else { "loading" },
 			}
 
