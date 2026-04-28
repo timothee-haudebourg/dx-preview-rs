@@ -13,12 +13,14 @@ use dioxus::prelude::*;
 mod component;
 mod config;
 mod home;
+pub mod layouts;
 pub mod protocol;
 pub mod ui;
 
 use component::ComponentPage;
 pub use config::Config;
 use home::Home;
+pub use layouts::PaddedLayout;
 
 /// Launch the storybook web app with the given configuration.
 ///
