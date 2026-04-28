@@ -6,7 +6,7 @@ edition = "2024"
 [features]
 default = []
 model = []
-app = ["model", "dioxus/web", "dioxus/router", "dep:serde", "dep:serde_json", "dep:wasm-bindgen", "dep:web-sys", "dep:futures-channel", "dep:futures-util"]
+app = ["model", "dioxus/web", "dioxus/router", "dep:serde", "dep:serde_json", "dep:wasm-bindgen", "dep:web-sys", "dep:futures-channel", "dep:futures-util", "dep:lipsum"]
 preview = ["app"]
 
 [[bin]]
@@ -26,3 +26,4 @@ web-sys = { version = "0.3", features = ["Window", "HtmlIFrameElement", "Message
 slab = "0.4.12"
 futures-channel = { version = "0.3", optional = true }
 futures-util = { version = "0.3", optional = true }
+lipsum = { version = "0.9", optional = true }

@@ -130,3 +130,6 @@ pub mod app;
 
 #[cfg(feature = "app")]
 pub use app::{Config, launch};
+
+#[cfg(feature = "app")]
+pub use lipsum::{lipsum, lipsum_title, lipsum_words};
