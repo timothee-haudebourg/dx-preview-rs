@@ -1,3 +1,5 @@
+#![allow(unpredictable_function_pointer_comparisons)]
+
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use dioxus::prelude::*;
@@ -54,7 +56,8 @@ fn ComponentBody(name: String, props: String) -> Element {
 			return rsx! {
 				Remount {
 					key_hash: key,
-					{(entry.render)(values)}
+					render: entry.render,
+					values,
 				}
 			};
 		}
@@ -69,19 +72,26 @@ fn ComponentBody(name: String, props: String) -> Element {
 }
 
 /// Forces a full remount of its contents whenever `key_hash` changes.
+///
+/// `render` and `values` are passed through to `Remounted` so the render
+/// function is called *inside* `Remounted`'s component scope. This ensures
+/// any hooks invoked by the render function (e.g. via `From` conversions on
+/// preview props) are owned by `Remounted` and are torn down and recreated
+/// whenever the key changes.
 #[component]
-fn Remount(key_hash: u64, children: Element) -> Element {
+fn Remount(key_hash: u64, render: fn(Vec<Value>) -> Element, values: Vec<Value>) -> Element {
 	rsx! {
-		for children in [children] {
+		for (render, values) in [(render, values)] {
 			Remounted {
 				key: "{key_hash}",
-				{children}
+				render,
+				values,
 			}
 		}
 	}
 }
 
 #[component]
-fn Remounted(children: Element) -> Element {
-	children
+fn Remounted(render: fn(Vec<Value>) -> Element, values: Vec<Value>) -> Element {
+	(render)(values)
 }
