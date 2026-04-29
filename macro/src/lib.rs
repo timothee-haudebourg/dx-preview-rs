@@ -68,12 +68,19 @@ struct PreviewArgs {
 	/// rsx! { MyLayout { MyComponent { ...props } } }
 	/// ```
 	layout: Option<syn::Path>,
+	/// Concrete type arguments for generic components, e.g. `with(Row, String)`.
+	///
+	/// When set, the render function emits a local type alias for each generic
+	/// parameter (`type T = Row;`) and calls the component with a turbofish
+	/// (`MyComponent::<Row, String> { … }`).
+	type_args: Vec<syn::Type>,
 }
 
 impl syn::parse::Parse for PreviewArgs {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		let mut krate = None;
 		let mut layout = None;
+		let mut type_args = Vec::new();
 
 		while !input.is_empty() {
 			if input.peek(Token![crate]) {
@@ -82,14 +89,22 @@ impl syn::parse::Parse for PreviewArgs {
 				krate = Some(input.parse()?);
 			} else {
 				let key: syn::Ident = input.parse()?;
-				let _: Token![=] = input.parse()?;
-				if key == "layout" {
-					layout = Some(input.parse()?);
+				if key == "with" {
+					// with(Type1, Type2, ...) — no `=`, parenthesised list
+					let content;
+					syn::parenthesized!(content in input);
+					let tys = content.parse_terminated(syn::Type::parse, Token![,])?;
+					type_args = tys.into_iter().collect();
 				} else {
-					return Err(syn::Error::new(
-						key.span(),
-						"unknown key: expected `crate` or `layout`",
-					));
+					let _: Token![=] = input.parse()?;
+					if key == "layout" {
+						layout = Some(input.parse()?);
+					} else {
+						return Err(syn::Error::new(
+							key.span(),
+							"unknown key: expected `crate`, `layout`, or `with`",
+						));
+					}
 				}
 			}
 
@@ -98,7 +113,11 @@ impl syn::parse::Parse for PreviewArgs {
 			}
 		}
 
-		Ok(Self { krate, layout })
+		Ok(Self {
+			krate,
+			layout,
+			type_args,
+		})
 	}
 }
 
@@ -109,6 +128,9 @@ struct DemoAttrs {
 	hidden: bool,
 	/// `#[demo(default = <expr>)]` — explicit default value.
 	default_expr: Option<TokenStream2>,
+	/// `#[demo(from = <Type>)]` — intermediate `Reflect` type; converted to
+	/// the prop type via `Into` before rendering.
+	from_type: Option<syn::Type>,
 }
 
 /// Strip all `#[preview(...)]` attributes from `attrs`, collecting their content.
@@ -117,6 +139,7 @@ struct DemoAttrs {
 fn take_preview_attrs(attrs: &mut Vec<syn::Attribute>) -> DemoAttrs {
 	let mut hidden = false;
 	let mut default_expr = None;
+	let mut from_type = None;
 
 	attrs.retain(|attr| {
 		if !attr.path().is_ident("preview") {
@@ -131,10 +154,14 @@ fn take_preview_attrs(attrs: &mut Vec<syn::Attribute>) -> DemoAttrs {
 					let _: Token![=] = input.parse()?;
 					let expr: syn::Expr = input.parse()?;
 					default_expr = Some(quote! { #expr });
+				} else if ident == "from" {
+					let _: Token![=] = input.parse()?;
+					let ty: syn::Type = input.parse()?;
+					from_type = Some(ty);
 				} else {
 					return Err(syn::Error::new(
 						ident.span(),
-						"expected `hide` or `default = <expr>`",
+						"expected `hide`, `default = <expr>`, or `from = <Type>`",
 					));
 				}
 				if input.peek(Token![,]) {
@@ -149,6 +176,7 @@ fn take_preview_attrs(attrs: &mut Vec<syn::Attribute>) -> DemoAttrs {
 	DemoAttrs {
 		hidden,
 		default_expr,
+		from_type,
 	}
 }
 
@@ -161,17 +189,23 @@ struct ParamInfo {
 	hidden: bool,
 	/// Explicit default expression (used both in UI defaults and render fallback).
 	default_expr: Option<TokenStream2>,
+	/// When set, this type is used for `Reflect` in the UI instead of `ty`.
+	/// The extracted value is converted to `ty` via `Into` before rendering.
+	from_type: Option<syn::Type>,
 }
 
 impl ParamInfo {
-	/// The token stream for this param's default value.
+	/// The type exposed to the preview UI — `from_type` if set, else `ty`.
+	fn reflect_ty(&self) -> &syn::Type {
+		self.from_type.as_ref().unwrap_or(&self.ty)
+	}
+
+	/// Default value expression, typed as `reflect_ty()`.
 	fn default_tokens(&self) -> TokenStream2 {
+		let reflect_ty = self.reflect_ty();
 		match &self.default_expr {
 			Some(expr) => quote! { { #expr } },
-			None => {
-				let ty = &self.ty;
-				quote! { <#ty as ::std::default::Default>::default() }
-			}
+			None => quote! { <#reflect_ty as ::std::default::Default>::default() },
 		}
 	}
 }
@@ -308,7 +342,11 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 /// ```
 #[proc_macro_attribute]
 pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
-	let PreviewArgs { krate, layout } = parse_macro_input!(args as PreviewArgs);
+	let PreviewArgs {
+		krate,
+		layout,
+		type_args,
+	} = parse_macro_input!(args as PreviewArgs);
 	let krate = krate
 		.map(|p| quote! { #p })
 		.unwrap_or_else(|| quote! { ::dx_preview });
@@ -339,6 +377,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 				ty,
 				hidden: demo.hidden,
 				default_expr: demo.default_expr,
+				from_type: demo.from_type,
 			});
 		}
 	}
@@ -366,7 +405,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 		.enumerate()
 		.map(|(i, p)| {
 			let name_str = p.name.to_string();
-			let ty = &p.ty;
+			let ty = p.reflect_ty();
 			let default = p.default_tokens();
 
 			// Generate a named fn so it can be stored as a fn() -> Value.
@@ -403,14 +442,28 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 		.map(|p| {
 			let name = &p.name;
 			let ty = &p.ty;
+			let reflect_ty = p.reflect_ty();
 			let fallback = p.default_tokens();
 
 			if p.hidden {
-				quote! { let #name: #ty = #fallback; }
+				if p.from_type.is_some() {
+					quote! { let #name: #ty = { let __from = #fallback; __from.into() }; }
+				} else {
+					quote! { let #name: #ty = #fallback; }
+				}
+			} else if p.from_type.is_some() {
+				quote! {
+					let #name: #ty =
+						<#reflect_ty as #model::Reflect>::try_from_value(
+							__values.next().unwrap_or(#model::Value::Option(None)),
+						)
+						.unwrap_or_else(|_| #fallback)
+						.into();
+				}
 			} else {
 				quote! {
 					let #name: #ty =
-						<#ty as #model::Reflect>::try_from_value(
+						<#reflect_ty as #model::Reflect>::try_from_value(
 							__values.next().unwrap_or(#model::Value::Option(None)),
 						)
 						.unwrap_or_else(|_| #fallback);
@@ -418,6 +471,32 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 			}
 		})
 		.collect();
+
+	// Generic type aliases — emitted at the top of the render function so that
+	// prop type annotations referencing the generic params resolve correctly.
+	let generic_param_names: Vec<Ident> = input_fn
+		.sig
+		.generics
+		.params
+		.iter()
+		.filter_map(|p| match p {
+			syn::GenericParam::Type(tp) => Some(tp.ident.clone()),
+			_ => None,
+		})
+		.collect();
+
+	let type_aliases: Vec<TokenStream2> = generic_param_names
+		.iter()
+		.zip(type_args.iter())
+		.map(|(name, ty)| quote! { type #name = #ty; })
+		.collect();
+
+	// Turbofish for the component call, e.g. `MyComponent::<Row, String>`.
+	let component_call = if type_args.is_empty() {
+		quote! { #component_ident }
+	} else {
+		quote! { #component_ident::<#(#type_args),*> }
+	};
 
 	// RSX prop assignments (explicit `name: name` form for clarity)
 	let prop_assignments: Vec<TokenStream2> = params
@@ -434,7 +513,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 		Some(layout_path) => quote! {
 			rsx! {
 				#layout_path {
-					#component_ident {
+					#component_call {
 						#(#prop_assignments)*
 					}
 				}
@@ -442,7 +521,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 		},
 		None => quote! {
 			rsx! {
-				#component_ident {
+				#component_call {
 					#(#prop_assignments)*
 				}
 			}
@@ -473,6 +552,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 		fn #render_fn(
 			values: ::std::vec::Vec<#model::Value>,
 		) -> ::dioxus::prelude::Element {
+			#(#type_aliases)*
 			use ::dioxus::prelude::*;
 			let mut __values = values.into_iter();
 			#(#prop_extractions)*
