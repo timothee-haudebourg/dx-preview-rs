@@ -269,6 +269,7 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 	let variant_indices: Vec<u8> = (0u8..variants.len() as u8).collect();
 
 	quote! {
+		#[cfg(feature = "preview")]
 		impl ::dx_preview::model::Reflect for #name {
 			const TYPE: ::dx_preview::model::Type = ::dx_preview::model::Type::Enum(
 				::dx_preview::model::EnumType {

@@ -28,9 +28,12 @@ impl Context {
 
 #[component]
 pub fn Home() -> Element {
+	let mut entries: Vec<_> = inventory::iter::<ComponentEntry>.into_iter().collect();
+	entries.sort_unstable_by_key(|entry| entry.name);
+
 	let context = provide_context(Rc::new(Context {
 		current_index: use_signal(|| 0),
-		entries: inventory::iter::<ComponentEntry>.into_iter().collect(),
+		entries,
 	}));
 
 	let current_index = context.current_index;
