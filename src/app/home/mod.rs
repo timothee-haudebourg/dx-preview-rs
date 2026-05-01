@@ -47,14 +47,9 @@ pub fn Home() -> Element {
 		document::Link { rel: "stylesheet", href: THEME }
 		document::Link { rel: "stylesheet", href: STYLE }
 
-		div {
-			class: "dxp-home",
+		div { class: "dxp-home",
 
-			Menu {
-				title: "dx·preview",
-				items,
-				selected: current_index,
-			}
+			Menu { title: "dx·preview", items, selected: current_index }
 
 			main {
 				if let Some(entry) = context.read_current_entry() {
@@ -70,8 +65,7 @@ pub fn Home() -> Element {
 #[component]
 fn EmptyView() -> Element {
 	rsx! {
-		div {
-			class: "dxp-empty-view",
+		div { class: "dxp-empty-view",
 			span { "📖" }
 			span { "Select a component from the sidebar" }
 		}

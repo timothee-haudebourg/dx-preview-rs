@@ -34,8 +34,7 @@ pub fn Menu(
 	rsx! {
 		document::Link { rel: "stylesheet", href: STYLE }
 
-		nav {
-			class: "dxp-menu",
+		nav { class: "dxp-menu",
 			header { "{title}" }
 			div {
 				for (index, label) in items.into_iter().enumerate() {

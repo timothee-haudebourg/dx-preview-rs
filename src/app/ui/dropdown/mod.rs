@@ -104,9 +104,7 @@ pub fn DropdownMenuItem(
 			role: "menuitem",
 			class: "dxp-dropdown-item",
 			"data-role": if role == Role::Destructive { "destructive" },
-			ButtonContent { to, onclick, enabled,
-				{children}
-			}
+			ButtonContent { to, onclick, enabled, {children} }
 		}
 	}
 }

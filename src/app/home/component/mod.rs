@@ -46,8 +46,7 @@ pub fn ComponentView(entry: &'static ComponentEntry) -> Element {
 	});
 
 	rsx! {
-		div {
-			class: "dxp-component-view",
+		div { class: "dxp-component-view",
 
 			iframe {
 				id: CHILD_ID,

@@ -17,8 +17,7 @@ use dioxus::prelude::*;
 #[component]
 pub fn PaddedLayout(children: Element) -> Element {
 	rsx! {
-		div {
-			style: "display: flex; align-items: center; justify-content: center; padding: 2rem; width: 100%; height: 100%; max-width: 24rem; box-sizing: border-box; margin: 0 auto;",
+		div { style: "display: flex; align-items: center; justify-content: center; padding: 2rem; width: 100%; height: 100%; max-width: 24rem; box-sizing: border-box; margin: 0 auto;",
 			{children}
 		}
 	}

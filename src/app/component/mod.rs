@@ -54,18 +54,13 @@ fn ComponentBody(name: String, props: String) -> Element {
 	for entry in inventory::iter::<ComponentEntry> {
 		if entry.name == name {
 			return rsx! {
-				Remount {
-					key_hash: key,
-					render: entry.render,
-					values,
-				}
+				Remount { key_hash: key, render: entry.render, values }
 			};
 		}
 	}
 
 	rsx! {
-		p {
-			style: "color:#9ca3af;padding:40px;font-family:sans-serif;",
+		p { style: "color:#9ca3af;padding:40px;font-family:sans-serif;",
 			"Component \"{name}\" not found."
 		}
 	}
@@ -82,11 +77,7 @@ fn ComponentBody(name: String, props: String) -> Element {
 fn Remount(key_hash: u64, render: fn(Vec<Value>) -> Element, values: Vec<Value>) -> Element {
 	rsx! {
 		for (render, values) in [(render, values)] {
-			Remounted {
-				key: "{key_hash}",
-				render,
-				values,
-			}
+			Remounted { key: "{key_hash}", render, values }
 		}
 	}
 }

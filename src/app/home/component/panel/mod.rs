@@ -16,28 +16,20 @@ pub fn Panel(
 ) -> Element {
 	if entry.properties.is_empty() {
 		return rsx! {
-			div {
-				class: "dxp-properties-panel",
-				"data-empty": "true",
-				"No editable properties"
-			}
+			div { class: "dxp-properties-panel", "data-empty": "true", "No editable properties" }
 		};
 	}
 
 	rsx! {
-		div {
-			class: "dxp-properties-panel",
+		div { class: "dxp-properties-panel",
 
-			document::Link { rel: "stylesheet", href: STYLE },
+			document::Link { rel: "stylesheet", href: STYLE }
 
 			header { "Properties" }
 
 			div {
 				for (prop, value) in entry.properties.iter().zip(values) {
-					PropertyEditor {
-						prop,
-						value
-					}
+					PropertyEditor { prop, value }
 				}
 			}
 		}

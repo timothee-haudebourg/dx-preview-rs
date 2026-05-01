@@ -10,14 +10,11 @@ const STYLE: Asset = asset!("./style.css");
 #[component]
 pub fn PropertyEditor(prop: &'static Property, value: Signal<Value>) -> Element {
 	rsx! {
-		div {
-			class: "dxp-property-editor",
+		div { class: "dxp-property-editor",
 
-			document::Link { rel: "stylesheet", href: STYLE },
+			document::Link { rel: "stylesheet", href: STYLE }
 
-			label {
-				"{prop.name}"
-			}
+			label { "{prop.name}" }
 
 			ValueEditor { ty: &prop.r#type, value }
 		}
@@ -33,12 +30,24 @@ where
 	V: PartialEq + AnyValueSignal,
 {
 	match ty {
-		Type::Bool => rsx! { BoolPropertyEditor { value } },
-		Type::String => rsx! { StringPropertyEditor { value } },
-		Type::Int(int_type) => rsx! { IntPropertyEditor { int_type: *int_type, value } },
-		Type::Enum(enum_type) => rsx! { EnumPropertyEditor { enum_type: *enum_type, value } },
-		Type::Option(inner) => rsx! { OptionPropertyEditor { inner, value } },
-		Type::Signal(inner_ty) => rsx! { SignalPropertyEditor { inner_ty, value } },
+		Type::Bool => rsx! {
+			BoolPropertyEditor { value }
+		},
+		Type::String => rsx! {
+			StringPropertyEditor { value }
+		},
+		Type::Int(int_type) => rsx! {
+			IntPropertyEditor { int_type: *int_type, value }
+		},
+		Type::Enum(enum_type) => rsx! {
+			EnumPropertyEditor { enum_type: *enum_type, value }
+		},
+		Type::Option(inner) => rsx! {
+			OptionPropertyEditor { inner, value }
+		},
+		Type::Signal(inner_ty) => rsx! {
+			SignalPropertyEditor { inner_ty, value }
+		},
 	}
 }
 
@@ -48,7 +57,9 @@ where
 	V: PartialEq + AnyValueSignal,
 {
 	let value = use_hook(|| value.couple_into_signal().unwrap());
-	rsx! { BoolInput { value } }
+	rsx! {
+		BoolInput { value }
+	}
 }
 
 #[component]
@@ -57,7 +68,9 @@ where
 	V: PartialEq + AnyValueSignal,
 {
 	let value = use_hook(|| value.couple_into_signal().unwrap());
-	rsx! { StringInput { value } }
+	rsx! {
+		StringInput { value }
+	}
 }
 
 #[component]
@@ -66,7 +79,9 @@ where
 	V: PartialEq + AnyValueSignal,
 {
 	let value = use_hook(|| value.couple_into_signal().unwrap());
-	rsx! { IntInput { value } }
+	rsx! {
+		IntInput { value }
+	}
 }
 
 #[component]
@@ -75,7 +90,9 @@ where
 	V: PartialEq + AnyValueSignal,
 {
 	let value = use_hook(|| value.couple_into_signal().unwrap());
-	rsx! { EnumInput { variants: enum_type.variants, value } }
+	rsx! {
+		EnumInput { variants: enum_type.variants, value }
+	}
 }
 
 /// Editor for `Option<T>`: a checkbox to toggle Some/None, plus the inner
@@ -102,8 +119,7 @@ where
 	});
 
 	rsx! {
-		div {
-			class: "dxp-option-editor",
+		div { class: "dxp-option-editor",
 			input {
 				r#type: "checkbox",
 				checked: is_some(),
@@ -130,10 +146,8 @@ where
 	};
 
 	rsx! {
-		div {
-			class: "dxp-signal-editor",
-			span {
-				title: "Reactive signal — changes are shared with the preview",
+		div { class: "dxp-signal-editor",
+			span { title: "Reactive signal — changes are shared with the preview",
 				"⚡"
 			}
 			ValueEditor { ty: inner_ty, value: inner_value }
