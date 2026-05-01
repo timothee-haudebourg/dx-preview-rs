@@ -1,0 +1,44 @@
+/* ── Button content ───────────────────────────────────────────────────────── */
+
+/*
+ * Resets browser-default styles on any element rendered by ButtonContent
+ * (<button>, <a>, or <div>).  Visual styling — colours, padding, hover
+ * effects — is intentionally absent here; callers add it via a parent
+ * selector, e.g. `.dxp-dropdown-item > .dxp-btn-content { … }`.
+ */
+.dxp-btn-content {
+	/* layout */
+	display: flex;
+	align-items: center;
+	width: 100%;
+	box-sizing: border-box;
+
+	/* reset <button> defaults */
+	background: none;
+	border: none;
+	padding: 0;
+	margin: 0;
+
+	/* reset <a> defaults */
+	text-decoration: none;
+
+	/* shared */
+	font: inherit;
+	color: inherit;
+	cursor: pointer;
+	text-align: left;
+	outline: none;
+}
+
+.dxp-btn-content:focus-visible {
+	box-shadow: var(--ui-focus-ring);
+	border-radius: var(--ui-radius);
+}
+
+/* ── Shared disabled state ────────────────────────────────────────────────── */
+
+.dxp-btn-content[data-disabled] {
+	cursor: not-allowed;
+	opacity: 0.5;
+	pointer-events: none;
+}

@@ -1,0 +1,61 @@
+/* ── Dropdown menu ────────────────────────────────────────────────────────── */
+
+.dxp-dropdown-menu {
+	/* reset <ul> browser defaults */
+	list-style: none;
+	margin: 0;
+	padding: 0;
+
+	/* sizing */
+	width: 100%;
+	min-width: fit-content;
+	overflow-y: auto;
+
+	/* spacing from the anchor */
+	margin-top: var(--ui-space-item);
+
+	/* appearance */
+	box-shadow: var(--ui-shadow);
+	border: 1px solid var(--ui-color-border);
+	border-radius: var(--ui-radius);
+	background: #fdfdfc;
+}
+
+/* ── Dropdown item ────────────────────────────────────────────────────────── */
+
+.dxp-dropdown-item {
+	display: flex;
+	padding: 4px;
+}
+
+/* Target the ButtonContent rendered element.
+ * An explicit class is necessary here because ButtonContent may render as
+ * a <button>, <a>, or <div> — a single element-type selector cannot cover
+ * all three cases. */
+.dxp-dropdown-item > .dxp-btn-content {
+	padding: 6px 10px;
+	border-radius: var(--ui-radius);
+	font-size: var(--ui-font-size);
+	color: var(--ui-color-text);
+	user-select: none;
+	white-space: nowrap;
+	transition:
+		background var(--ui-transition),
+		color var(--ui-transition);
+}
+
+.dxp-dropdown-item > .dxp-btn-content:hover:not([data-disabled]) {
+	background: #f1f5f9;
+	color: var(--ui-color-text);
+}
+
+/* ── Destructive variant ──────────────────────────────────────────────────── */
+
+.dxp-dropdown-item[data-role="destructive"] > .dxp-btn-content {
+	color: var(--ui-color-danger);
+}
+
+.dxp-dropdown-item[data-role="destructive"]
+	> .dxp-btn-content:hover:not([data-disabled]) {
+	background: rgb(220 38 38 / 0.08);
+}

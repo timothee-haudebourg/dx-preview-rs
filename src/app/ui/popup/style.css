@@ -1,0 +1,6 @@
+.dxp-popup-frame {
+	box-shadow: var(--ui-shadow);
+	border: 1px solid var(--ui-color-border);
+	border-radius: var(--ui-radius);
+	background: #fdfdfc;
+}
