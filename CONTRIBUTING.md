@@ -11,10 +11,23 @@ Please read the [contribution guidelines](https://github.com/timothee-haudebourg
 The project is split into two crates:
 
 - **`dx-preview-macro`** — a proc-macro crate providing the `#[preview]` attribute.
-- **`dx-preview`** — the runtime library, with an optional `app` feature that enables the
+- **`dx-preview`** — the runtime library, with an optional `web` feature that enables the
   interactive browser UI.
 
 Refer to the crate and module documentation for implementation details.
+
+## Previewing UI components
+
+The UI components that make up the dx-preview shell (inputs, menus, etc.) are
+themselves annotated with `#[preview]` and can be inspected interactively. To
+launch the preview shell against the library's own components, run:
+
+```sh
+dx serve --features preview
+```
+
+This is the recommended way to develop and test changes to the shell's UI
+components.
 
 ## README.md
 

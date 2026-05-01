@@ -1,7 +1,7 @@
 //! A component preview and development tool for [Dioxus](https://dioxuslabs.com/).
 //!
-//! Annotate your components with [`preview`] and get an interactive storybook-style
-//! UI where each property can be inspected and edited live — without writing any
+//! Annotate your components with [`preview`] and get an interactive preview UI
+//! where each property can be inspected and edited live — without writing any
 //! registration code or maintaining a central list.
 //!
 //! ## Features
@@ -9,9 +9,12 @@
 //! - **Zero-config discovery** — components register themselves at link time; no
 //!   central list to maintain.
 //! - **Isolated previews** — each component renders in its own browsing context so
-//!   styles never leak between the preview and the shell UI.
+//!   styles never leak between the preview shell and the component under inspection.
 //! - **Live property editing** — scalar properties (`bool`, `String`, integers) are
 //!   reflected automatically and exposed as interactive controls.
+//! - **Reactive signals** — a `Signal<T>` property is shared between the shell and
+//!   the preview iframe; if the component writes to the signal, the properties panel
+//!   reflects the new value in real time.
 //!
 //! ## Usage
 //!
@@ -22,7 +25,7 @@
 //! dx-preview = { path = "…" }
 //!
 //! [features]
-//! storybook = ["dx-preview/app"]
+//! preview = ["dx-preview/web"]
 //! ```
 //!
 //! ### 2. Annotate your components
@@ -54,25 +57,32 @@
 //!
 //! | Attribute | Effect |
 //! |---|---|
-//! | *(none)* | Visible; type must implement [`model::ShowcaseType`]; default via `Default::default()` |
+//! | *(none)* | Visible; type must implement [`model::Reflect`]; default via `Default::default()` |
 //! | `#[preview(default = expr)]` | Visible; use `expr` as the initial value |
 //! | `#[preview(hide)]` | Hidden; `Default::default()` is used in the preview |
 //! | `#[preview(hide, default = expr)]` | Hidden; `expr` is used in the preview |
 //!
-//! If a type does not implement [`model::ShowcaseType`] and is not marked
+//! If a type does not implement [`model::Reflect`] and is not marked
 //! `#[preview(hide)]`, you will get a compile-time error on the offending parameter.
 //!
-//! ### 3. Implement `ShowcaseType` for custom types (optional)
+//! ### 3. Implement `Reflect` for custom types (optional)
 //!
-//! `bool`, `String`, and all primitive integer types are supported out of the box.
-//! For your own types, implement the trait:
+//! `bool`, `String`, `Option<T>`, and all primitive integer types implement
+//! [`model::Reflect`] out of the box. For unit enums, derive it:
 //!
 //! ```rust,ignore
-//! use dx_preview::model::{ShowcaseType, IntType, Type, Value, TypeError};
+//! #[derive(dx_preview::Reflect)]
+//! enum Size { Small, Medium, Large }
+//! ```
+//!
+//! For other custom types, implement the trait manually:
+//!
+//! ```rust,ignore
+//! use dx_preview::model::{Reflect, IntType, Type, Value, TypeError};
 //!
 //! struct Radius(u32);
 //!
-//! impl ShowcaseType for Radius {
+//! impl Reflect for Radius {
 //!     const TYPE: Type = Type::Int(IntType::U32);
 //!
 //!     fn to_value(self) -> Value {
@@ -82,7 +92,7 @@
 //!     fn try_from_value(v: Value) -> Result<Self, TypeError> {
 //!         match v {
 //!             Value::Int(dx_preview::model::IntValue::U32(n)) => Ok(Radius(n)),
-//!             _ => Err(TypeError),
+//!             _ => Err(TypeError::InvalidType),
 //!         }
 //!     }
 //! }
@@ -90,14 +100,14 @@
 //!
 //! ### 4. Launch the preview binary
 //!
-//! Add a binary target guarded by the `storybook` feature so it never appears in
+//! Add a binary target guarded by the `preview` feature so it never appears in
 //! production builds:
 //!
 //! ```toml
 //! [[bin]]
-//! name = "storybook"
-//! path = "src/bin/storybook.rs"
-//! required-features = ["storybook"]
+//! name = "preview"
+//! path = "src/bin/preview.rs"
+//! required-features = ["preview"]
 //! ```
 //!
 //! ```rust,ignore
@@ -117,7 +127,7 @@
 //! Run it with the Dioxus CLI:
 //!
 //! ```sh
-//! dx serve --features storybook --bin storybook --platform web
+//! dx serve --features preview --bin preview
 //! ```
 
 pub use dx_preview_macro::{Reflect, preview};
