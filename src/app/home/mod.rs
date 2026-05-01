@@ -48,7 +48,7 @@ pub fn Home() -> Element {
 		document::Link { rel: "stylesheet", href: STYLE }
 
 		div {
-			class: "home",
+			class: "dxp-home",
 
 			Menu {
 				title: "dx·preview",
@@ -71,7 +71,7 @@ pub fn Home() -> Element {
 fn EmptyView() -> Element {
 	rsx! {
 		div {
-			class: "empty-view",
+			class: "dxp-empty-view",
 			span { "📖" }
 			span { "Select a component from the sidebar" }
 		}

@@ -15,17 +15,14 @@ owns it.  Reference it with a path relative to the package root:
 
 ```
 src/app/ui/
-├── menu.rs
-├── menu.css        ← styles for Menu
-└── input/
-    ├── bool.rs
-    ├── mod.css   ← styles shared by all input components
-    └── …
+└── menu/
+    ├── mod.rs
+    └── style.css ← styles for Menu
 ```
 
 ```rust
-// In src/app/ui/menu.rs
-const STYLE: Asset = asset!("src/app/ui/menu.css");
+// In src/app/ui/menu/mod.rs
+const STYLE: Asset = asset!("./style.css");
 ```
 
 Do not put component styles under `assets/`.  That directory is reserved for
@@ -38,16 +35,17 @@ that are not owned by a single component.
 
 ### Class names
 
-Use **kebab-case** for every class name.
+Use **kebab-case** for every class name.  Every class name must be prefixed
+with `dxp-` to avoid collisions with third-party stylesheets.
 
 ```css
 /* ✓ */
-.my-component { … }
-.input-bool { … }
+.dxp-my-component { … }
+.dxp-input-bool { … }
 
 /* ✗ */
-.my_component { … }
-.inputBool { … }
+.dxp-my_component { … }
+.dxp-inputBool { … }
 ```
 
 ### Prefer element selectors over redundant classes
@@ -79,31 +77,41 @@ When position is meaningful and stable, `:first-child` / `:last-child` /
 .empty-view :last-child  { font-size: 0.9rem; }
 ```
 
-### Shared semantic classes
+### State data attributes
 
-State modifiers that carry the same meaning in multiple components are defined
-once and reused.  Apply them alongside the component-scoped base class; never
-encode them into the base class name.
+Runtime state is encoded in `data-*` attributes instead of classes.  This
+keeps identity classes — which are always present on an element — separate from
+state that changes at runtime, and avoids accidental collisions with utility
+CSS frameworks.
 
-| Class | Meaning |
-|---|---|
-| `selected` | The item is the active selection |
-| `enabled` | The item / field is active |
-| `disabled` | The item / field is inactive / greyed out |
-| `empty` | A container currently holds no content |
-| `loading` | Content is being fetched or initialised |
-| `ready` | Content has finished loading |
+**Naming convention**
 
-Scope their visual effect to the component that owns the context:
+| Kind | Form | Example |
+|---|---|---|
+| Boolean | bare attribute | `data-disabled`, `data-selected` |
+| Enum / multi-value | attribute with value | `data-state="loading"`, `data-role="destructive"` |
+
+**CSS selector pattern** — always scoped under the component's root class:
 
 ```css
-/* ✓ — effect is scoped; the shared class name is just a semantic marker */
-.menu-item.selected   { background: var(--ui-color-primary); }
-.property-editor label.disabled { color: var(--ui-color-text-disabled); }
-
-/* ✗ — global visual rule leaks across components */
-.selected { background: blue; }
+/* ✓ */
+.dxp-menu-item[data-selected] { background: var(--ui-color-primary); }
+.dxp-dropdown-item[data-role="destructive"] { color: var(--ui-color-danger); }
 ```
+
+**RSX pattern** — when the `if` branch is not taken the attribute is omitted
+entirely, identical behaviour to an untaken `class:` branch:
+
+```rust
+// ✓
+div {
+    class: "dxp-menu-item",
+    "data-selected": if is_selected { "true" },
+}
+```
+
+Visual state must never be encoded in identity class names — no
+`dxp-menu-item--selected`, `dxp-menu-item--disabled`, etc.
 
 ---
 
@@ -117,8 +125,8 @@ modifier.  Do not build the full class string in a `let` binding.
 ```rust
 // ✓
 div {
-    class: "menu-item",
-    class: if is_selected { "selected" },
+    class: "dxp-menu-item",
+    "data-selected": if is_selected { "true" },
 }
 
 // ✗

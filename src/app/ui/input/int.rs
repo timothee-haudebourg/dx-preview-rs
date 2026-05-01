@@ -15,7 +15,7 @@ pub fn IntInput(value: Signal<i64>) -> Element {
 		input {
 			r#type: "number",
 			value: "{value}",
-			class: "input-number",
+			class: "dxp-input-number",
 			oninput: move |e| {
 				if let Ok(n) = e.value().parse::<i64>() {
 					value.set(n);

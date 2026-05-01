@@ -11,7 +11,7 @@ const STYLE: Asset = asset!("./style.css");
 pub fn PropertyEditor(prop: &'static Property, value: Signal<Value>) -> Element {
 	rsx! {
 		div {
-			class: "property-editor",
+			class: "dxp-property-editor",
 
 			document::Link { rel: "stylesheet", href: STYLE },
 
@@ -103,7 +103,7 @@ where
 
 	rsx! {
 		div {
-			class: "option-editor",
+			class: "dxp-option-editor",
 			input {
 				r#type: "checkbox",
 				checked: is_some(),
@@ -131,7 +131,7 @@ where
 
 	rsx! {
 		div {
-			class: "signal-editor",
+			class: "dxp-signal-editor",
 			span {
 				title: "Reactive signal — changes are shared with the preview",
 				"⚡"

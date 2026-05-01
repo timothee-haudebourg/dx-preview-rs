@@ -47,12 +47,12 @@ pub fn ComponentView(entry: &'static ComponentEntry) -> Element {
 
 	rsx! {
 		div {
-			class: "component-view",
+			class: "dxp-component-view",
 
 			iframe {
 				id: CHILD_ID,
 				src: "{src}",
-				class: if iframe_ready() { "ready" } else { "loading" },
+				"data-state": if iframe_ready() { "ready" } else { "loading" },
 			}
 
 			Panel { entry, iframe_ready, values }

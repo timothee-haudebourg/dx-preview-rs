@@ -12,7 +12,7 @@ pub fn StringInput(value: Signal<String>) -> Element {
 
 		input {
 			r#type: "text",
-			class: "input-text",
+			class: "dxp-input-text",
 			value: "{value}",
 			oninput: move |e| value.set(e.value()),
 		}

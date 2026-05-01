@@ -24,7 +24,7 @@ pub fn EnumInput(
 		document::Link { rel: "stylesheet", href: STYLE }
 
 		select {
-			class: "input-select",
+			class: "dxp-input-select",
 			onchange: move |e| {
 				if let Ok(i) = e.value().parse::<u8>() {
 					value.set(EnumValue(i));

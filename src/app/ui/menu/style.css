@@ -1,16 +1,16 @@
 /* ── Menu ─────────────────────────────────────────────────────────────────── */
 
-.menu {
+.dxp-menu {
 	width: 240px;
 	min-width: 240px;
 	border-right: 1px solid var(--ui-color-border);
 	overflow-y: auto;
-	background: var(--ui-color-surface);
+	background: var(--ui-color-bg-panel);
 	display: flex;
 	flex-direction: column;
 }
 
-.menu header {
+.dxp-menu header {
 	padding: 16px 20px;
 	font-weight: 700;
 	font-size: 15px;
@@ -21,14 +21,14 @@
 	user-select: none;
 }
 
-.menu > div {
+.dxp-menu > div {
 	padding: 6px 0;
 	flex: 1;
 }
 
 /* ── Menu item ────────────────────────────────────────────────────────────── */
 
-.menu-item {
+.dxp-menu-item {
 	padding: 7px 14px;
 	margin: 2px 6px;
 	border-radius: var(--ui-radius);
@@ -44,13 +44,13 @@
 	text-overflow: ellipsis;
 }
 
-.menu-item:hover:not(.selected) {
-	background: var(--ui-color-hover);
+.dxp-menu-item:hover:not([data-selected]) {
+	background: #f1f5f9;
 	color: var(--ui-color-text);
 }
 
-.menu-item.selected {
-	background: var(--ui-color-primary);
-	color: var(--ui-color-primary-fg);
+.dxp-menu-item[data-selected] {
+	background: var(--ui-color-accent);
+	color: #fff;
 	font-weight: 500;
 }

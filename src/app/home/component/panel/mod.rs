@@ -17,7 +17,8 @@ pub fn Panel(
 	if entry.properties.is_empty() {
 		return rsx! {
 			div {
-				class: "properties-panel empty",
+				class: "dxp-properties-panel",
+				"data-empty": "true",
 				"No editable properties"
 			}
 		};
@@ -25,7 +26,7 @@ pub fn Panel(
 
 	rsx! {
 		div {
-			class: "properties-panel",
+			class: "dxp-properties-panel",
 
 			document::Link { rel: "stylesheet", href: STYLE },
 

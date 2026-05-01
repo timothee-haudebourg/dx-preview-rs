@@ -35,7 +35,7 @@ pub fn Menu(
 		document::Link { rel: "stylesheet", href: STYLE }
 
 		nav {
-			class: "menu",
+			class: "dxp-menu",
 			header { "{title}" }
 			div {
 				for (index, label) in items.into_iter().enumerate() {
@@ -66,8 +66,8 @@ fn MenuItem(
 
 	rsx! {
 		div {
-			class: "menu-item",
-			class: if is_selected { "selected" },
+			class: "dxp-menu-item",
+			"data-selected": if is_selected { "true" },
 			onclick: move |_| selected.set(index),
 			"{label}"
 		}

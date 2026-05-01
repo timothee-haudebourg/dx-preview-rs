@@ -11,7 +11,7 @@ pub fn BoolInput(value: Signal<bool>) -> Element {
 		document::Link { rel: "stylesheet", href: STYLE }
 
 		label {
-			class: "input-bool",
+			class: "dxp-input-bool",
 			input {
 				r#type: "checkbox",
 				checked: value(),

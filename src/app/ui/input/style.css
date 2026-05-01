@@ -1,32 +1,32 @@
 /* ── Input controls ──────────────────────────────────────────────────────────── */
 
-.input-text,
-.input-number,
-.input-select {
+.dxp-input-text,
+.dxp-input-number,
+.dxp-input-select {
 	width: 100%;
 	box-sizing: border-box;
 	border: 1.5px solid var(--ui-color-border);
-	border-radius: var(--ui-radius-sm);
+	border-radius: var(--ui-radius);
 	padding: 5px 8px;
 	font-size: 13px;
 	font-family: var(--ui-font);
 	outline: none;
-	background: var(--ui-color-bg);
+	background: var(--ui-color-bg-input);
 	color: var(--ui-color-text);
 	transition:
 		border-color 150ms ease,
 		box-shadow 150ms ease;
 }
 
-.input-text:focus,
-.input-number:focus {
-	border-color: var(--ui-color-primary);
+.dxp-input-text:focus,
+.dxp-input-number:focus {
+	border-color: var(--ui-color-accent);
 	box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
 }
 
 /* ── Select ──────────────────────────────────────────────────────────────────── */
 
-.input-select {
+.dxp-input-select {
 	cursor: pointer;
 	appearance: none;
 	-webkit-appearance: none;
@@ -36,14 +36,14 @@
 	padding-right: 28px;
 }
 
-.input-select:focus {
-	border-color: var(--ui-color-primary);
+.dxp-input-select:focus {
+	border-color: var(--ui-color-accent);
 	box-shadow: 0 0 0 3px rgb(37 99 235 / 0.12);
 }
 
 /* ── Bool (checkbox + label) ─────────────────────────────────────────────────── */
 
-.input-bool {
+.dxp-input-bool {
 	display: flex;
 	align-items: center;
 	gap: 8px;
@@ -51,15 +51,15 @@
 	user-select: none;
 }
 
-.input-bool input {
+.dxp-input-bool input {
 	width: 16px;
 	height: 16px;
 	cursor: pointer;
-	accent-color: var(--ui-color-primary);
+	accent-color: var(--ui-color-accent);
 	flex-shrink: 0;
 }
 
-.input-bool span {
+.dxp-input-bool span {
 	font-size: 13px;
 	color: var(--ui-color-text);
 	font-weight: 500;
