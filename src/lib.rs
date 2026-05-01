@@ -125,11 +125,11 @@ pub use dx_preview_macro::{Reflect, preview};
 #[cfg(feature = "model")]
 pub mod model;
 
-#[cfg(feature = "app")]
+#[cfg(feature = "web")]
 pub mod app;
 
-#[cfg(feature = "app")]
+#[cfg(feature = "web")]
 pub use app::{Config, PaddedLayout, launch};
 
-#[cfg(feature = "app")]
+#[cfg(feature = "web")]
 pub use lipsum::{lipsum, lipsum_title, lipsum_words};

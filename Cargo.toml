@@ -6,8 +6,8 @@ edition = "2024"
 [features]
 default = []
 model = []
-app = ["model", "dioxus/web", "dioxus/router", "dep:serde", "dep:serde_json", "dep:wasm-bindgen", "dep:web-sys", "dep:futures-channel", "dep:futures-util", "dep:lipsum"]
-preview = ["app"]
+web = ["model", "dioxus/web", "dioxus/router", "dep:serde", "dep:serde_json", "dep:wasm-bindgen", "dep:web-sys", "dep:futures-channel", "dep:futures-util", "dep:lipsum"]
+preview = ["web"]
 
 [[bin]]
 name = "preview"
