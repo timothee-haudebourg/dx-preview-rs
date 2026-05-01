@@ -5,7 +5,7 @@ use crate::model::{EnumValue, EnumVariant};
 
 const STYLE: Asset = asset!("./style.css");
 
-#[preview(crate = crate)]
+#[preview(crate = crate, layout = crate::app::PaddedLayout)]
 /// A `<select>` dropdown for choosing among a fixed set of named enum variants.
 ///
 /// `value` holds the index (0-based) of the currently selected variant and is
@@ -26,16 +26,12 @@ pub fn EnumInput(
 		select {
 			class: "dxp-input-select",
 			onchange: move |e| {
-				if let Ok(i) = e.value().parse::<u8>() {
-					value.set(EnumValue(i));
-				}
+			    if let Ok(i) = e.value().parse::<u8>() {
+			        value.set(EnumValue(i));
+			    }
 			},
 			for (i, variant) in variants.iter().enumerate() {
-				option {
-					value: "{i}",
-					selected: value().0 as usize == i,
-					"{variant.name}"
-				}
+				option { value: "{i}", selected: value().0 as usize == i, "{variant.name}" }
 			}
 		}
 	}

@@ -3,7 +3,7 @@ use dx_preview_macro::preview;
 
 const STYLE: Asset = asset!("./style.css");
 
-#[preview(crate = crate)]
+#[preview(crate = crate, layout = crate::app::PaddedLayout)]
 /// A text input bound to a [`Signal<String>`].
 #[component]
 pub fn StringInput(value: Signal<String>) -> Element {
