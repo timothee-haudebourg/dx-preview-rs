@@ -219,6 +219,18 @@ impl ParamInfo {
 /// [`Type::Enum`](dx_preview::model::Type::Enum), which the preview shell
 /// renders as a `<select>` dropdown.
 ///
+/// # Crate path
+///
+/// When the derive is used inside the `dx-preview` crate itself, pass
+/// `#[preview(crate = crate)]` on the type so that the generated `impl`
+/// references the local crate instead of the external `::dx_preview` path:
+///
+/// ```rust,ignore
+/// #[derive(Reflect)]
+/// #[preview(crate = crate)]
+/// enum Color { Red, Green, Blue }
+/// ```
+///
 /// # Panics
 ///
 /// Compilation fails if:
@@ -232,12 +244,28 @@ impl ParamInfo {
 /// #[derive(dx_preview::Reflect)]
 /// enum Color { Red, Green, Blue }
 /// ```
-#[proc_macro_derive(Reflect)]
+#[proc_macro_derive(Reflect, attributes(preview))]
 pub fn derive_reflect(input: TokenStream) -> TokenStream {
 	let input = parse_macro_input!(input as DeriveInput);
 
 	let name = &input.ident;
 	let name_str = name.to_string();
+
+	// Resolve the crate path: honour `#[preview(crate = ...)]` when the
+	// derive is used inside `dx-preview` itself, and fall back to the
+	// absolute `::dx_preview` path otherwise.
+	let krate = input
+		.attrs
+		.iter()
+		.find_map(|attr| {
+			if !attr.path().is_ident("preview") {
+				return None;
+			}
+			attr.parse_args::<PreviewArgs>().ok()?.krate
+		})
+		.map(|p| quote! { #p })
+		.unwrap_or_else(|| quote! { ::dx_preview });
+	let model = quote! { #krate::model };
 
 	let Data::Enum(data) = &input.data else {
 		return syn::Error::new_spanned(&input, "`Reflect` can only be derived for enums")
@@ -270,28 +298,28 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 
 	quote! {
 		#[cfg(feature = "preview")]
-		impl ::dx_preview::model::Reflect for #name {
-			const TYPE: ::dx_preview::model::Type = ::dx_preview::model::Type::Enum(
-				::dx_preview::model::EnumType {
+		impl #model::Reflect for #name {
+			const TYPE: #model::Type = #model::Type::Enum(
+				#model::EnumType {
 					name: #name_str,
 					variants: &[
-						#( ::dx_preview::model::EnumVariant { name: #variant_names } ),*
+						#( #model::EnumVariant { name: #variant_names } ),*
 					],
 				},
 			);
 
-			fn to_value(self) -> ::dx_preview::model::Value {
-				::dx_preview::model::Value::Enum(match self {
+			fn to_value(self) -> #model::Value {
+				#model::Value::Enum(match self {
 					#( Self::#variant_idents => #variant_indices, )*
 				})
 			}
 
 			fn try_from_value(
-				value: ::dx_preview::model::Value,
-			) -> Result<Self, ::dx_preview::model::TypeError> {
+				value: #model::Value,
+			) -> Result<Self, #model::TypeError> {
 				match value {
-					#( ::dx_preview::model::Value::Enum(#variant_indices) => Ok(Self::#variant_idents), )*
-					_ => Err(::dx_preview::model::TypeError::InvalidValue),
+					#( #model::Value::Enum(#variant_indices) => Ok(Self::#variant_idents), )*
+					_ => Err(#model::TypeError::InvalidValue),
 				}
 			}
 		}
@@ -354,7 +382,14 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 	// Convenience alias for the model module path used throughout.
 	let model = quote! { #krate::model };
 
-	let mut input_fn = parse_macro_input!(input as ItemFn);
+	// If the input is not a function — e.g. an enum annotated with
+	// `#[preview(crate = crate)]` purely to inform `#[derive(Reflect)]` of
+	// the crate path — pass the item through unchanged rather than emitting
+	// a spurious parse error.
+	let mut input_fn = match syn::parse::<ItemFn>(input.clone()) {
+		Ok(f) => f,
+		Err(_) => return input,
+	};
 
 	let fn_name = input_fn.sig.ident.clone();
 	let fn_name_str = fn_name.to_string();
