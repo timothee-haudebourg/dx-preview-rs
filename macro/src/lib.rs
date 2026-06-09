@@ -299,6 +299,11 @@ pub fn derive_reflect(input: TokenStream) -> TokenStream {
 	quote! {
 		#[cfg(feature = "preview")]
 		impl #model::Reflect for #name {
+			const EXPR: #model::TypeExpr = #model::TypeExpr {
+				name: #name_str,
+				args: &[],
+			};
+
 			const TYPE: #model::Type = #model::Type::Enum(
 				#model::EnumType {
 					name: #name_str,
@@ -463,6 +468,7 @@ pub fn preview(args: TokenStream, input: TokenStream) -> TokenStream {
 				#model::Property {
 					name: #name_str,
 					r#type: <#ty as #model::Reflect>::TYPE,
+					type_expr: <#ty as #model::Reflect>::EXPR,
 					required: true,
 					default_value: #default_fn_name,
 				}

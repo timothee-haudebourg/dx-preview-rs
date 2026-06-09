@@ -9,12 +9,17 @@ const STYLE: Asset = asset!("./style.css");
 
 #[component]
 pub fn PropertyEditor(prop: &'static Property, value: Signal<Value>) -> Element {
+	let type_expr = prop.type_expr.to_string();
+
 	rsx! {
 		div { class: "dxp-property-editor",
 
 			document::Link { rel: "stylesheet", href: STYLE }
 
-			label { "{prop.name}" }
+			div { class: "dxp-header",
+				label { "{prop.name}" }
+				div { "{type_expr}" }
+			}
 
 			ValueEditor { ty: &prop.r#type, value }
 		}

@@ -78,8 +78,32 @@ pub enum TypeError {
 	Required,
 }
 
+#[derive(Copy, Clone, Debug, PartialEq, Eq)]
+pub struct TypeExpr {
+	pub name: &'static str,
+	pub args: &'static [&'static Self],
+}
+
+impl std::fmt::Display for TypeExpr {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.write_str(self.name)?;
+		if let Some((first, rest)) = self.args.split_first() {
+			write!(f, "<{first}")?;
+			for arg in rest {
+				write!(f, ", {arg}")?;
+			}
+			f.write_str(">")?;
+		}
+		Ok(())
+	}
+}
+
 pub trait Reflect: Sized {
+	/// The runtime type tag used by the property editor.
 	const TYPE: Type;
+
+	/// The Rust type expression, used to display the type name in the UI.
+	const EXPR: TypeExpr;
 
 	fn to_value(self) -> Value;
 
@@ -88,6 +112,10 @@ pub trait Reflect: Sized {
 
 impl Reflect for bool {
 	const TYPE: Type = Type::Bool;
+	const EXPR: TypeExpr = TypeExpr {
+		name: "bool",
+		args: &[],
+	};
 
 	fn to_value(self) -> Value {
 		Value::Bool(self)
@@ -103,6 +131,10 @@ impl Reflect for bool {
 
 impl Reflect for String {
 	const TYPE: Type = Type::String;
+	const EXPR: TypeExpr = TypeExpr {
+		name: "String",
+		args: &[],
+	};
 
 	fn to_value(self) -> Value {
 		Value::String(self)
@@ -121,6 +153,10 @@ where
 	T: Reflect,
 {
 	const TYPE: Type = Type::Option(&T::TYPE);
+	const EXPR: TypeExpr = TypeExpr {
+		name: "Option",
+		args: &[&T::EXPR],
+	};
 
 	fn to_value(self) -> Value {
 		Value::Option(self.map(|t| Box::new(t.to_value())))
@@ -140,6 +176,10 @@ where
 	T: 'static + Reflect + Clone + PartialEq,
 {
 	const TYPE: Type = Type::Signal(&T::TYPE);
+	const EXPR: TypeExpr = TypeExpr {
+		name: "Signal",
+		args: &[&T::EXPR],
+	};
 
 	fn to_value(self) -> Value {
 		Value::Signal(ReactiveValue::couple_from_signal(self))
@@ -157,6 +197,10 @@ macro_rules! impl_showcase_int {
 	($prim:ty, $int_type:ident, $int_value:ident) => {
 		impl Reflect for $prim {
 			const TYPE: Type = Type::Int(IntType::$int_type);
+			const EXPR: TypeExpr = TypeExpr {
+				name: stringify!($prim),
+				args: &[],
+			};
 
 			fn to_value(self) -> Value {
 				Value::Int(IntValue::$int_value(self))
