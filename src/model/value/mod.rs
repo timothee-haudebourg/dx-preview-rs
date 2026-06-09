@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-use crate::model::{EnumType, Reflect, Type, TypeError};
+use crate::model::{EnumType, Reflect, Type, TypeError, TypeExpr};
 
 use super::IntType;
 
@@ -27,6 +27,11 @@ pub enum Value {
 pub struct EnumValue(pub u8);
 
 impl Reflect for EnumValue {
+	const EXPR: TypeExpr = TypeExpr {
+		name: "EnumValue",
+		args: &[],
+	};
+
 	const TYPE: Type = Type::Enum(EnumType {
 		name: "EnumValue",
 		variants: &[],

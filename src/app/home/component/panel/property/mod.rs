@@ -83,9 +83,39 @@ fn IntPropertyEditor<V>(int_type: IntType, value: V) -> Element
 where
 	V: PartialEq + AnyValueSignal,
 {
-	let value = use_hook(|| value.couple_into_signal().unwrap());
-	rsx! {
-		IntInput { value }
+	match int_type {
+		IntType::U8 => {
+			let value: Signal<u8> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
+		IntType::U16 => {
+			let value: Signal<u16> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
+		IntType::U32 => {
+			let value: Signal<u32> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
+		IntType::U64 => {
+			let value: Signal<u64> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
+		IntType::I8 => {
+			let value: Signal<i8> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
+		IntType::I16 => {
+			let value: Signal<i16> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
+		IntType::I32 => {
+			let value: Signal<i32> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
+		IntType::I64 => {
+			let value: Signal<i64> = use_hook(|| value.couple_into_signal().unwrap());
+			rsx! { IntInput { value } }
+		}
 	}
 }
 
